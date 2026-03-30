@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>활동 모니터링 대시보드 - 파트너스본부</title>
+  
+  <!-- 1. Tailwind CSS (스타일링) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 2. React 라이브러리 (핵심 기능) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- 3. Babel (브라우저에서 React 코드를 읽을 수 있게 변환) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-[#FFF9F5]">
+  <!-- 대시보드가 그려질 도화지 -->
+  <div id="root"></div>
+
+  <!-- React 앱 코드 시작 -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // --- 아이콘 컴포넌트 (외부 라이브러리 의존성을 없애기 위해 직접 SVG로 구현) ---
+    const RefreshCw = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    );
+    const AlertCircle = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    );
+    const Calendar = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    );
+    const Users = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    );
+    const Target = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+    );
+    const BarChart2 = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    );
+
+    // CSV 파싱 유틸리티 함수
+    function parseCSV(text) {
+      let p = '', row = [''], ret = [row], i = 0, r = 0, s = !0, l;
+      for (l of text) {
+        if ('"' === l) {
+          if (s && l === p) row[i] += l;
+          s = !s;
+        } else if (',' === l && s) l = row[++i] = '';
+        else if ('\n' === l && s) {
+          if ('\r' === p) row[i] = row[i].slice(0, -1);
+          row = ret[++r] = [l = '']; i = 0;
+        } else row[i] += l;
+        p = l;
+      }
+      if (ret.length > 0 && ret[ret.length - 1].length === 1 && ret[ret.length - 1][0] === '') {
+        ret.pop();
+      }
+      return ret;
+    }
+
+    // 1월 1일 기준 주차 계산 로직 (월요일 시작 기준)
+    function getCurrentWeekAndYear() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const jan1 = new Date(year, 0, 1);
+      
+      let day = jan1.getDay();
+      let diffToMonday = day === 0 ? -6 : 1 - day; 
+      
+      const firstWeekStart = new Date(year, 0, 1 + diffToMonday);
+      firstWeekStart.setHours(0, 0, 0, 0);
+      
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diff = today - firstWeekStart;
+      const week = Math.floor(diff / (1000 * 60 * 60 * 24 * 7)) + 1;
+      
+      return { year, week };
+    }
+
+    function App() {
+      const SHEET_ID = '1k1mqDWo__CtnKeRLE-U5RrnW43bNn8atyfQC8xV3BSo';
+      const SHEET_NAME = 'Activity';
+      const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_NAME}`;
+
+      const currentTimeInfo = getCurrentWeekAndYear();
+      
+      const [data, setData] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+      const [usingMockData, setUsingMockData] = useState(false);
+
+      const [selectedTab, setSelectedTab] = useState('예정');
+      const [selectedYear, setSelectedYear] = useState(currentTimeInfo.year);
+      const [selectedWeek, setSelectedWeek] = useState(currentTimeInfo.week);
+      const [selectedDept, setSelectedDept] = useState('전체');
+
+      const fetchData = async () => {
+        setLoading(true);
+        setError(null);
+        setUsingMockData(false);
+        
+        try {
+          let text = '';
+          try {
+            const response = await fetch(CSV_URL);
+            if (!response.ok) throw new Error('네트워크 응답이 정상이 아닙니다.');
+            text = await response.text();
+          } catch (directErr) {
+            console.warn('직접 접근 실패, 프록시를 통해 재시도합니다.');
+            const PROXY_URL = `https://api.allorigins.win/raw?url=${encodeURIComponent(CSV_URL)}`;
+            const proxyResponse = await fetch(PROXY_URL);
+            if (!proxyResponse.ok) throw new Error('시트 접근 권한이 없거나 불러올 수 없습니다.');
+            text = await proxyResponse.text();
+          }
+          
+          if (text.trim().startsWith('<!DOCTYPE html>')) {
+            throw new Error('시트 접근 권한이 없습니다. 시트 공유 설정을 확인해주세요.');
+          }
+
+          const parsedData = parseCSV(text);
+          if (parsedData.length < 2) {
+            throw new Error('데이터가 비어있거나 형식이 올바르지 않습니다.');
+          }
+
+          const headers = parsedData[0];
+          const rows = parsedData.slice(1).map(row => {
+            const rowData = {};
+            headers.forEach((header, index) => {
+              rowData[header?.trim()] = row[index]?.trim() || '';
+            });
+            return rowData;
+          });
+
+          setData(rows);
+        } catch (err) {
+          console.warn('데이터 연동 중 오류 발생:', err.message);
+          setError(err.message);
+          loadMockData();
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const loadMockData = () => {
+        setUsingMockData(true);
+        const mock = [
+          { 소속: '1지점', 사번: '2023001', 이름: '김대표', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '예정', TA: '10', AP: '5', P: '3', C: '1', N: '1', 소개: '2', 활동계: '22', 보험료: '1,500,000' },
+          { 소속: '1지점', 사번: '2023001', 이름: '김대표', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '8', AP: '4', P: '2', C: '1', N: '3', 소개: '1', 활동계: '19', 보험료: '1,200,000' },
+          { 소속: '1지점', 사번: '2023002', 이름: '이파트너', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '예정', TA: '15', AP: '8', P: '4', C: '2', N: '0', 소개: '1', 활동계: '30', 보험료: '2,000,000' },
+          { 소속: '1지점', 사번: '2023002', 이름: '이파트너', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '16', AP: '9', P: '5', C: '2', N: '1', 소개: '2', 활동계: '35', 보험료: '2,500,000' },
+        ];
+        setData(mock);
+      };
+
+      useEffect(() => {
+        fetchData();
+      }, []);
+
+      const availableYears = useMemo(() => {
+        const years = [...new Set(data.map(item => item['연도']).filter(Boolean))];
+        if (!years.includes(String(currentTimeInfo.year))) years.push(String(currentTimeInfo.year));
+        return years.sort((a, b) => b - a);
+      }, [data, currentTimeInfo.year]);
+
+      const availableWeeks = useMemo(() => {
+        const weeks = [...new Set(data.map(item => item['주차']).filter(Boolean))];
+        if (!weeks.includes(String(currentTimeInfo.week))) weeks.push(String(currentTimeInfo.week));
+        return weeks.sort((a, b) => Number(a) - Number(b));
+      }, [data, currentTimeInfo.week]);
+
+      const availableDepts = useMemo(() => {
+        const depts = [...new Set(data.map(item => item['소속']).filter(Boolean))];
+        return ['전체', ...depts.sort()];
+      }, [data]);
+
+      const filteredData = useMemo(() => {
+        return data.filter(item => {
+          const effectiveTab = selectedTab === '예정결과 비율' ? '결과' : selectedTab;
+          const matchTab = item['예정결과'] === effectiveTab;
+          const matchYear = item['연도'] === String(selectedYear);
+          const matchWeek = item['주차'] === String(selectedWeek);
+          const matchDept = selectedDept === '전체' || item['소속'] === selectedDept;
+          return matchTab && matchYear && matchWeek && matchDept;
+        });
+      }, [data, selectedTab, selectedYear, selectedWeek, selectedDept]);
+
+      const processedData = useMemo(() => {
+        if (filteredData.length === 0) return [];
+
+        const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
+
+        let maxPremium = 0;
+        let topPremiumRow = null;
+        filteredData.forEach(row => {
+          const currentPremium = parseNum(row['보험료']);
+          if (currentPremium > maxPremium) {
+            maxPremium = currentPremium;
+            topPremiumRow = row;
+          }
+        });
+
+        const remainingForActivity = topPremiumRow 
+          ? filteredData.filter(row => row !== topPremiumRow) 
+          : [...filteredData];
+
+        let maxActivity = 0;
+        let topActivityRow = null;
+        remainingForActivity.forEach(row => {
+          const currentActivity = parseNum(row['활동계']);
+          if (currentActivity > maxActivity) {
+            maxActivity = currentActivity;
+            topActivityRow = row;
+          }
+        });
+
+        const rest = remainingForActivity.filter(row => row !== topActivityRow);
+        rest.sort((a, b) => {
+          const activityA = parseNum(a['활동계']);
+          const activityB = parseNum(b['활동계']);
+          if (activityB !== activityA) {
+            return activityB - activityA;
+          }
+          const sabunA = String(a['사번'] || '');
+          const sabunB = String(b['사번'] || '');
+          return sabunA.localeCompare(sabunB, undefined, { numeric: true });
+        });
+
+        const result = [];
+        if (topPremiumRow) result.push({ ...topPremiumRow, badgePremium: true, badgeActivity: false });
+        if (topActivityRow) result.push({ ...topActivityRow, badgePremium: false, badgeActivity: true });
+        
+        const restWithBadges = rest.map(row => ({ ...row, badgePremium: false, badgeActivity: false }));
+
+        return [...result, ...restWithBadges];
+      }, [filteredData]);
+
+      const individualRatios = useMemo(() => {
+        if (selectedTab !== '예정결과 비율' || processedData.length === 0) return [];
+
+        const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
+        const metrics = ['TA', 'AP', 'P', 'C', 'N', '소개', '활동계', '보험료'];
+
+        return processedData.map(actualRow => {
+          const expectedRow = data.find(item => 
+            item['예정결과'] === '예정' &&
+            item['사번'] === actualRow['사번'] &&
+            item['연도'] === actualRow['연도'] &&
+            item['주차'] === actualRow['주차']
+          );
+
+          const ratios = {
+            이름: actualRow['이름'],
+            badgePremium: actualRow.badgePremium,
+            badgeActivity: actualRow.badgeActivity
+          };
+
+          metrics.forEach(key => {
+            const actualVal = parseNum(actualRow[key]);
+            const expectedVal = expectedRow ? parseNum(expectedRow[key]) : 0;
+            
+            let ratioNum = 0;
+            if (expectedVal === 0) {
+              ratioNum = actualVal > 0 ? 100 : 0; 
+            } else {
+              ratioNum = Math.round((actualVal / expectedVal) * 100);
+            }
+            ratios[key] = ratioNum;
+          });
+
+          return ratios;
+        });
+      }, [processedData, data, selectedTab]);
+
+      const renderProgressCell = (ratio, isHighlight = false) => {
+        const boundedRatio = Math.min(Math.max(ratio, 0), 100);
+        const isComplete = ratio >= 100;
+        
+        return (
+          <td className="py-2.5 px-1.5">
+            <div className="relative w-full h-7 bg-gray-50 rounded-md overflow-hidden flex items-center justify-center border border-gray-100/50">
+              <div 
+                className={`absolute left-0 top-0 bottom-0 transition-all duration-700 ease-out ${isComplete ? 'bg-orange-300/80' : 'bg-orange-100/60'}`} 
+                style={{ width: `${boundedRatio}%` }}
+              />
+              <span className={`relative z-10 text-xs ${isHighlight ? 'font-bold' : 'font-medium'} ${isComplete ? 'text-orange-900' : 'text-gray-600'}`}>
+                {ratio}%
+              </span>
+            </div>
+          </td>
+        );
+      };
+
+      return (
+        <div className="min-h-screen bg-[#FFF9F5] p-6 font-sans text-gray-800">
+          <div className="max-w-7xl mx-auto space-y-6">
+            
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-orange-100">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <Target className="text-orange-500" size={28} />
+                  활동 모니터링 대시보드
+                </h1>
+                <p className="text-sm text-gray-500 mt-1">
+                  파트너스본부의 주차별 활동 지표를 한눈에 파악합니다.
+                </p>
+              </div>
+              <button 
+                onClick={fetchData}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-lg transition-colors text-sm font-medium"
+              >
+                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                데이터 새로고침
+              </button>
+            </div>
+
+            {usingMockData && (
+              <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-r-lg flex items-start gap-3">
+                <AlertCircle className="text-orange-500 shrink-0 mt-0.5" size={20} />
+                <div className="text-sm text-orange-800">
+                  <p className="font-semibold mb-1">현재 예시 데이터로 화면을 보여드리고 있습니다.</p>
+                  <p className="opacity-90">실제 데이터를 연동하려면 구글 스프레드시트의 공유 설정을 <strong>'링크가 있는 모든 사용자' (뷰어)</strong>로 변경해주시거나, '파일 > 공유 > 웹에 게시'에서 CSV 형식으로 게시를 완료해 주십시오.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 space-y-5">
+              <div className="flex bg-gray-50 p-1 rounded-xl w-full max-w-lg">
+                {['예정', '결과', '예정결과 비율'].map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setSelectedTab(tab)}
+                    className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                      selectedTab === tab 
+                        ? 'bg-orange-500 text-white shadow-md' 
+                        : 'text-gray-500 hover:text-orange-500 hover:bg-orange-50'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">
+                    <Calendar size={14} /> 연도
+                  </label>
+                  <select 
+                    value={selectedYear} 
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+                  >
+                    {availableYears.map(year => (
+                      <option key={year} value={year}>{year}년</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="flex-1 min-w-[200px]">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">
+                    <Calendar size={14} /> 주차
+                  </label>
+                  <select 
+                    value={selectedWeek} 
+                    onChange={(e) => setSelectedWeek(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+                  >
+                    {availableWeeks.map(week => (
+                      <option key={week} value={week}>{week}주차</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex-1 min-w-[200px]">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">
+                    <Users size={14} /> 소속
+                  </label>
+                  <select 
+                    value={selectedDept} 
+                    onChange={(e) => setSelectedDept(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+                  >
+                    {availableDepts.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {selectedTab !== '예정결과 비율' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-orange-100 overflow-hidden animate-in fade-in duration-500">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-center border-collapse min-w-[800px]">
+                    <thead className="bg-orange-100 text-orange-900 border-b border-orange-200">
+                      <tr>
+                        <th style={{ width: '15%' }} className="py-3.5 px-4 font-semibold">소속</th>
+                        <th style={{ width: '15%' }} className="py-3.5 px-4 font-semibold">이름</th>
+                        <th style={{ width: '7.5%' }} className="py-3.5 px-2 font-semibold">TA</th>
+                        <th style={{ width: '7.5%' }} className="py-3.5 px-2 font-semibold">AP</th>
+                        <th style={{ width: '7.5%' }} className="py-3.5 px-2 font-semibold">P</th>
+                        <th style={{ width: '7.5%' }} className="py-3.5 px-2 font-semibold">C</th>
+                        <th style={{ width: '7.5%' }} className="py-3.5 px-2 font-semibold">N</th>
+                        <th style={{ width: '7.5%' }} className="py-3.5 px-2 font-semibold">소개</th>
+                        <th style={{ width: '10%' }} className="py-3.5 px-3 font-bold bg-orange-200/50">활동계</th>
+                        <th style={{ width: '15%' }} className="py-3.5 px-4 font-semibold">보험료</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {loading ? (
+                        <tr>
+                          <td colSpan="10" className="py-12 text-center text-gray-400">
+                            <RefreshCw className="animate-spin mx-auto mb-3 text-orange-300" size={24} />
+                            데이터를 불러오는 중입니다...
+                          </td>
+                        </tr>
+                      ) : processedData.length === 0 ? (
+                        <tr>
+                          <td colSpan="10" className="py-12 text-center text-gray-400">
+                            <AlertCircle className="mx-auto mb-3 text-gray-300" size={24} />
+                            선택한 조건에 해당하는 데이터가 없습니다.
+                          </td>
+                        </tr>
+                      ) : (
+                        processedData.map((row, idx) => (
+                          <tr key={idx} className={`transition-colors ${row.badgePremium || row.badgeActivity ? 'bg-orange-50/80 hover:bg-orange-100/80' : 'hover:bg-orange-50/50'}`}>
+                            <td className="py-3 px-4 font-medium text-gray-600">{row['소속']}</td>
+                            <td className="py-3 px-4 font-semibold text-gray-800">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {row['이름']}
+                                <div className="flex gap-1">
+                                  {row.badgePremium && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200" title="보험료 1등">
+                                      👑 보험료
+                                    </span>
+                                  )}
+                                  {row.badgeActivity && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200" title="활동계 1등">
+                                      🔥 활동계
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-2 text-gray-600">{row['TA']}</td>
+                            <td className="py-3 px-2 text-gray-600">{row['AP']}</td>
+                            <td className="py-3 px-2 text-gray-600">{row['P']}</td>
+                            <td className="py-3 px-2 text-gray-600">{row['C']}</td>
+                            <td className={`py-3 px-2 ${Number(row['N']) >= 3 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{row['N']}</td>
+                            <td className="py-3 px-2 text-gray-600">{row['소개']}</td>
+                            <td className="py-3 px-3 font-bold text-orange-600 bg-orange-50/30">{row['활동계']}</td>
+                            <td className="py-3 px-4 font-medium text-gray-700 text-right pr-6">{row['보험료']}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {!loading && processedData.length > 0 && (
+                  <div className="bg-orange-50/50 p-4 border-t border-orange-100 flex justify-between items-center text-sm">
+                    <span className="text-gray-500">
+                      총 <strong className="text-orange-600">{processedData.length}</strong>건의 데이터가 조회되었습니다.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedTab === '예정결과 비율' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-orange-100 overflow-hidden animate-in fade-in duration-500">
+                <div className="bg-orange-50 p-4 border-b border-orange-100 flex items-center gap-2">
+                  <BarChart2 size={20} className="text-orange-500" />
+                  <h2 className="text-lg font-bold text-gray-800">주간 예정·결과 비율</h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-center border-collapse min-w-[800px]">
+                    <thead className="bg-orange-100/50 text-orange-900 border-b border-orange-200">
+                      <tr>
+                        <th style={{ width: '15%' }} className="py-3.5 px-4 font-semibold">이름</th>
+                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">TA</th>
+                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">AP</th>
+                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">P</th>
+                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">C</th>
+                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">N</th>
+                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">소개</th>
+                        <th style={{ width: '10%' }} className="py-3.5 px-3 font-bold bg-orange-200/50">활동계</th>
+                        <th style={{ width: '15%' }} className="py-3.5 px-4 font-semibold">보험료</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {loading ? (
+                        <tr>
+                          <td colSpan="9" className="py-12 text-center text-gray-400">
+                            <RefreshCw className="animate-spin mx-auto mb-3 text-orange-300" size={24} />
+                            데이터를 불러오는 중입니다...
+                          </td>
+                        </tr>
+                      ) : individualRatios.length === 0 ? (
+                        <tr>
+                          <td colSpan="9" className="py-12 text-center text-gray-400">
+                            <AlertCircle className="mx-auto mb-3 text-gray-300" size={24} />
+                            선택한 조건에 해당하는 데이터가 없습니다.
+                          </td>
+                        </tr>
+                      ) : (
+                        individualRatios.map((row, idx) => (
+                          <tr key={idx} className={`transition-colors ${row.badgePremium || row.badgeActivity ? 'bg-orange-50/40' : 'hover:bg-gray-50'}`}>
+                            <td className="py-3 px-4 font-semibold text-gray-800 border-r border-gray-50">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {row['이름']}
+                                {(row.badgePremium || row.badgeActivity) && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div>
+                                )}
+                              </div>
+                            </td>
+                            {renderProgressCell(row['TA'])}
+                            {renderProgressCell(row['AP'])}
+                            {renderProgressCell(row['P'])}
+                            {renderProgressCell(row['C'])}
+                            {renderProgressCell(row['N'])}
+                            {renderProgressCell(row['소개'])}
+                            {renderProgressCell(row['활동계'], true)}
+                            {renderProgressCell(row['보험료'])}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {!loading && individualRatios.length > 0 && (
+                  <div className="bg-orange-50/30 p-4 border-t border-orange-100 flex justify-between items-center text-sm">
+                    <span className="text-gray-500">
+                      총 <strong className="text-orange-600">{individualRatios.length}</strong>건의 비율 데이터가 조회되었습니다.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
