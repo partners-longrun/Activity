@@ -108,7 +108,7 @@
 
       // 팝업(모달) 상태 관리
       const [modalUser, setModalUser] = useState(null);
-      const [modalYear, setModalYear] = useState(currentTimeInfo.year);
+      const [modalPeriod, setModalPeriod] = useState(50); // 연도 선택에서 기간 선택으로 변경
 
       // 오늘 날짜 및 주차별 라벨 계산 로직 추가
       const today = new Date();
@@ -221,52 +221,67 @@
         return ['전체', ...depts.sort()];
       }, [data]);
 
-      const annualStatsCache = useMemo(() => {
-        const cache = {};
-        data.forEach(row => {
-          const sabun = row['사번'];
-          const year = row['연도'];
-          if (!sabun || !year) return;
+      // 팝업창 전용 동적 기간(직전 N주) 통계 계산 로직 (기존 연간 캐싱 대체)
+      const modalStats = useMemo(() => {
+        if (!modalUser) return null;
+        
+        const sabun = modalUser.sabun;
+        const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
 
-          if (!cache[sabun]) cache[sabun] = {};
-          if (!cache[sabun][year]) {
-            cache[sabun][year] = {
-              expected: { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 },
-              actual: { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 },
-              activeWeeks: new Set(),
-              weeksWithN: new Set()
-            };
-          }
-
-          const yearNum = parseInt(year, 10);
-          const weekNum = parseInt(row['주차'], 10);
-          
-          // 핵심: 아직 결과가 완전히 입력되지 않은 이번주와 다음주(미래) 제외
-          const isPastWeek = (yearNum < currentTimeInfo.year) || (yearNum === currentTimeInfo.year && weekNum < currentTimeInfo.week);
-
-          if (isPastWeek) {
-            const isExpected = row['예정결과'] === '예정';
-            const isActual = row['예정결과'] === '결과';
-            const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
-
-            ['TA', 'AP', 'P', 'C', 'N', '소개', '활동계', '보험료'].forEach(key => {
-              const val = parseNum(row[key]);
-              if (isExpected) cache[sabun][year].expected[key] += val;
-              if (isActual) {
-                cache[sabun][year].actual[key] += val;
-                if (key === 'N' && val > 0) cache[sabun][year].weeksWithN.add(weekNum);
-              }
-            });
-
-            if (isActual) cache[sabun][year].activeWeeks.add(weekNum);
-          }
+        // 1. 완전히 종료된 과거 주차만 추출 (노이즈 제거)
+        const pastResultData = data.filter(d => {
+          if (d['예정결과'] !== '결과') return false;
+          const y = parseInt(d['연도'], 10);
+          const w = parseInt(d['주차'], 10);
+          return (y < currentTimeInfo.year) || (y === currentTimeInfo.year && w < currentTimeInfo.week);
         });
-        return cache;
-      }, [data, currentTimeInfo.year, currentTimeInfo.week]);
+
+        const distinctWeeks = [...new Set(pastResultData.map(d => `${d['연도']}-${String(d['주차']).padStart(2, '0')}`))].sort();
+        
+        const currentTarget = `${selectedYear}-${String(selectedWeek).padStart(2, '0')}`;
+        let targetIdx = distinctWeeks.indexOf(currentTarget);
+        
+        if (targetIdx === -1) {
+          targetIdx = distinctWeeks.filter(w => w <= currentTarget).length - 1;
+        }
+
+        // 2. 직전 N주(modalPeriod)에 해당하는 주차 필터링
+        const targetWeeks = targetIdx >= 0 
+          ? distinctWeeks.slice(Math.max(0, targetIdx - modalPeriod + 1), targetIdx + 1)
+          : [];
+
+        const expected = { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 };
+        const actual = { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 };
+        const activeWeeks = new Set();
+        const weeksWithN = new Set();
+
+        // 3. 해당 인원의 데이터 중 타겟 주차에 속하는 값만 합산
+        data.forEach(row => {
+          if (row['사번'] !== sabun) return;
+          const weekStr = `${row['연도']}-${String(row['주차']).padStart(2, '0')}`;
+          
+          if (!targetWeeks.includes(weekStr)) return;
+
+          const isExpected = row['예정결과'] === '예정';
+          const isActual = row['예정결과'] === '결과';
+
+          ['TA', 'AP', 'P', 'C', 'N', '소개', '활동계', '보험료'].forEach(key => {
+            const val = parseNum(row[key]);
+            if (isExpected) expected[key] += val;
+            if (isActual) {
+              actual[key] += val;
+              if (key === 'N' && val > 0) weeksWithN.add(weekStr);
+            }
+          });
+
+          if (isActual) activeWeeks.add(weekStr);
+        });
+
+        return { expected, actual, activeWeeks, weeksWithN };
+      }, [data, modalUser, modalPeriod, selectedYear, selectedWeek, currentTimeInfo]);
 
       const handleOpenModal = (sabun, name) => {
         setModalUser({ sabun, name });
-        setModalYear(selectedYear); 
       };
 
       const filteredData = useMemo(() => {
@@ -431,17 +446,9 @@
       }, [data, selectedTab, selectedYear, selectedWeek, selectedDept, diagnosticPeriod]);
 
       const renderModal = () => {
-        if (!modalUser) return null;
+        if (!modalUser || !modalStats) return null;
 
-        const sabun = modalUser.sabun;
-        const yearStats = annualStatsCache[sabun]?.[modalYear] || {
-          expected: { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 },
-          actual: { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 },
-          activeWeeks: new Set(),
-          weeksWithN: new Set()
-        };
-
-        const { expected, actual, activeWeeks, weeksWithN } = yearStats;
+        const { expected, actual, activeWeeks, weeksWithN } = modalStats;
 
         // 천 단위 콤마 포맷팅 헬퍼 함수
         const formatNum = (num) => num ? num.toLocaleString() : '0';
@@ -489,16 +496,17 @@
                 
                 <div className="flex items-center gap-3">
                   <select 
-                    value={modalYear} 
-                    onChange={(e) => setModalYear(e.target.value)}
+                    value={modalPeriod} 
+                    onChange={(e) => setModalPeriod(Number(e.target.value))}
                     className="bg-orange-50/50 border border-orange-200 text-gray-800 font-semibold rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-orange-300"
                   >
-                    {availableYears.map(year => (
-                      <option key={year} value={year}>{year}년</option>
-                    ))}
+                    <option value={50}>직전 50주</option>
+                    <option value={25}>직전 25주</option>
+                    <option value={12}>직전 12주</option>
+                    <option value={4}>직전 4주</option>
                   </select>
                   <p className="text-sm text-gray-600">
-                    <strong className="text-gray-800">{modalUser.name}</strong>님의 연간 활동 결과에 따른 각 활동 간의 통계입니다. 이 수치는 각 활동의 유효성을 가늠하는데 도움이 됩니다.
+                    <strong className="text-gray-800">{modalUser.name}</strong>님의 선택한 기준 주차부터 <strong className="text-gray-800">{modalPeriod}주간</strong>의 통계입니다. 단기/장기 트렌드 분석에 활용하십시오.
                   </p>
                 </div>
 
