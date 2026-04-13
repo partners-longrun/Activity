@@ -44,6 +44,9 @@
     const TrendingDown = ({ size = 24, className = "" }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
     );
+    const UserPlus = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+    );
 
     function parseCSV(text) {
       let p = '', row = [''], ret = [row], i = 0, r = 0, s = !0, l;
@@ -268,7 +271,7 @@
 
       const filteredData = useMemo(() => {
         return data.filter(item => {
-          const effectiveTab = (selectedTab === '예정결과 비율') ? '결과' : selectedTab;
+          const effectiveTab = (selectedTab === '본부 진단 리포트') ? '결과' : selectedTab;
           const matchTab = item['예정결과'] === effectiveTab;
           const matchYear = item['연도'] === String(selectedYear);
           const matchWeek = item['주차'] === String(selectedWeek);
@@ -336,11 +339,19 @@
         const groups = {
           lowActivity: [],     // 활동량 부족군
           lowAppointment: [],  // 약속 체결 취약군
-          lowClosing: []       // 클로징 취약군
+          lowClosing: [],      // 클로징 취약군
+          lowReferral: []      // 소개 확보 취약군
         };
 
-        // 1. 결과 데이터가 존재하는 모든 주차 추출 및 정렬 (예: "2026-05")
-        const distinctWeeks = [...new Set(data.filter(d => d['예정결과'] === '결과').map(d => `${d['연도']}-${String(d['주차']).padStart(2, '0')}`))].sort();
+        // 1. 결과 데이터가 존재하며, 이번주/다음주가 아닌 완전히 종료된 과거 주차만 추출
+        const pastResultData = data.filter(d => {
+          if (d['예정결과'] !== '결과') return false;
+          const y = parseInt(d['연도'], 10);
+          const w = parseInt(d['주차'], 10);
+          return (y < currentTimeInfo.year) || (y === currentTimeInfo.year && w < currentTimeInfo.week);
+        });
+
+        const distinctWeeks = [...new Set(pastResultData.map(d => `${d['연도']}-${String(d['주차']).padStart(2, '0')}`))].sort();
         
         // 2. 현재 선택된 기준 주차 찾기
         const currentTarget = `${selectedYear}-${String(selectedWeek).padStart(2, '0')}`;
@@ -357,8 +368,7 @@
           : [];
 
         // 4. 해당 기간, 조건에 맞는 결과 데이터만 필터링
-        const relevantData = data.filter(item => {
-          if (item['예정결과'] !== '결과') return false;
+        const relevantData = pastResultData.filter(item => {
           if (selectedDept !== '전체' && item['소속'] !== selectedDept) return false;
           const weekStr = `${item['연도']}-${String(item['주차']).padStart(2, '0')}`;
           return targetWeeks.includes(weekStr);
@@ -369,11 +379,12 @@
         relevantData.forEach(row => {
           const sabun = row['사번'];
           if (!agg[sabun]) {
-            agg[sabun] = { 사번: sabun, 이름: row['이름'], 소속: row['소속'], TA: 0, AP: 0, N: 0, 활동계: 0, weeks: new Set() };
+            agg[sabun] = { 사번: sabun, 이름: row['이름'], 소속: row['소속'], TA: 0, AP: 0, N: 0, 소개: 0, 활동계: 0, weeks: new Set() };
           }
           agg[sabun].TA += parseNum(row['TA']);
           agg[sabun].AP += parseNum(row['AP']);
           agg[sabun].N += parseNum(row['N']);
+          agg[sabun].소개 += parseNum(row['소개']);
           agg[sabun].활동계 += parseNum(row['활동계']);
           agg[sabun].weeks.add(`${row['연도']}-${row['주차']}`);
         });
@@ -382,6 +393,7 @@
         Object.values(agg).forEach(member => {
           // 해당 인원이 활동을 기록한 주차 수로 나누어 '주평균' 활동계 산출
           const avgActivity = member.활동계 / member.weeks.size || 0;
+          const avgReferral = member.소개 / member.weeks.size || 0;
           // 누적 볼륨 기반의 정확한 전환율 산출
           const taApRate = member.TA > 0 ? (member.AP / member.TA) * 100 : (member.AP > 0 ? 100 : 0);
           const apNRate = member.AP > 0 ? (member.N / member.AP) * 100 : (member.N > 0 ? 100 : 0);
@@ -389,17 +401,23 @@
           const memberData = {
             ...member,
             avgActivity: Math.round(avgActivity),
+            avgReferral: Number(avgReferral.toFixed(1)),
             taApRate: Math.round(taApRate),
             apNRate: Math.round(apNRate)
           };
 
-          // 우선순위 기반 배타적 분류 (가장 근원적인 문제인 활동량부터 진단)
+          // 복합 취약점 독립 진단 (해당되는 모든 취약군에 중복 노출 허용)
           if (memberData.avgActivity < 15) {
             groups.lowActivity.push(memberData);
-          } else if (memberData.taApRate < 50) {
+          }
+          if (memberData.taApRate < 50) {
             groups.lowAppointment.push(memberData);
-          } else if (memberData.apNRate < 50) {
+          }
+          if (memberData.apNRate < 30) { // 클로징 취약군 30% 미만으로 하향 조정
             groups.lowClosing.push(memberData);
+          }
+          if (memberData.avgReferral < 2) {
+            groups.lowReferral.push(memberData);
           }
         });
 
@@ -407,66 +425,10 @@
         groups.lowActivity.sort((a, b) => a.avgActivity - b.avgActivity);
         groups.lowAppointment.sort((a, b) => a.taApRate - b.taApRate);
         groups.lowClosing.sort((a, b) => a.apNRate - b.apNRate);
+        groups.lowReferral.sort((a, b) => a.avgReferral - b.avgReferral);
 
         return groups;
       }, [data, selectedTab, selectedYear, selectedWeek, selectedDept, diagnosticPeriod]);
-
-      const individualRatios = useMemo(() => {
-        if (selectedTab !== '예정결과 비율' || processedData.length === 0) return [];
-
-        const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
-        const metrics = ['TA', 'AP', 'P', 'C', 'N', '소개', '활동계', '보험료'];
-
-        return processedData.map(actualRow => {
-          const expectedRow = data.find(item => 
-            item['예정결과'] === '예정' &&
-            item['사번'] === actualRow['사번'] &&
-            item['연도'] === actualRow['연도'] &&
-            item['주차'] === actualRow['주차']
-          );
-
-          const ratios = {
-            사번: actualRow['사번'],
-            이름: actualRow['이름'],
-            badgePremium: actualRow.badgePremium,
-            badgeActivity: actualRow.badgeActivity
-          };
-
-          metrics.forEach(key => {
-            const actualVal = parseNum(actualRow[key]);
-            const expectedVal = expectedRow ? parseNum(expectedRow[key]) : 0;
-            
-            let ratioNum = 0;
-            if (expectedVal === 0) {
-              ratioNum = actualVal > 0 ? 100 : 0; 
-            } else {
-              ratioNum = Math.round((actualVal / expectedVal) * 100);
-            }
-            ratios[key] = ratioNum;
-          });
-
-          return ratios;
-        });
-      }, [processedData, data, selectedTab]);
-
-      const renderProgressCell = (ratio, isHighlight = false) => {
-        const boundedRatio = Math.min(Math.max(ratio, 0), 100);
-        const isComplete = ratio >= 100;
-        
-        return (
-          <td className="py-2.5 px-1.5">
-            <div className="relative w-full h-7 bg-gray-50 rounded-md overflow-hidden flex items-center justify-center border border-gray-100/50">
-              <div 
-                className={`absolute left-0 top-0 bottom-0 transition-all duration-700 ease-out ${isComplete ? 'bg-orange-300/80' : 'bg-orange-100/60'}`} 
-                style={{ width: `${boundedRatio}%` }}
-              />
-              <span className={`relative z-10 text-xs ${isHighlight ? 'font-bold' : 'font-medium'} ${isComplete ? 'text-orange-900' : 'text-gray-600'}`}>
-                {ratio}%
-              </span>
-            </div>
-          </td>
-        );
-      };
 
       const renderModal = () => {
         if (!modalUser) return null;
@@ -674,7 +636,7 @@
 
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 space-y-5">
               <div className="flex bg-gray-50 p-1 rounded-xl w-full max-w-2xl">
-                {['예정', '결과', '예정결과 비율', '본부 진단 리포트'].map(tab => (
+                {['예정', '결과', '본부 진단 리포트'].map(tab => (
                   <button
                     key={tab}
                     onClick={() => setSelectedTab(tab)}
@@ -822,77 +784,7 @@
               </div>
             )}
 
-            {/* 2. 예정결과 비율 테이블 */}
-            {selectedTab === '예정결과 비율' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-orange-100 overflow-hidden animate-in fade-in duration-500">
-                <div className="bg-orange-50 p-4 border-b border-orange-100 flex items-center gap-2">
-                  <BarChart2 size={20} className="text-orange-500" />
-                  <h2 className="text-lg font-bold text-gray-800">주간 예정·결과 비율</h2>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-center border-collapse min-w-[800px]">
-                    <thead className="bg-orange-100/50 text-orange-900 border-b border-orange-200">
-                      <tr>
-                        <th style={{ width: '15%' }} className="py-3.5 px-4 font-semibold">이름</th>
-                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">TA</th>
-                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">AP</th>
-                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">P</th>
-                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">C</th>
-                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">N</th>
-                        <th style={{ width: '10%' }} className="py-3.5 px-2 font-semibold">소개</th>
-                        <th style={{ width: '10%' }} className="py-3.5 px-3 font-bold bg-orange-200/50">활동계</th>
-                        <th style={{ width: '15%' }} className="py-3.5 px-4 font-semibold">보험료</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {loading ? (
-                        <tr>
-                          <td colSpan="9" className="py-12 text-center text-gray-400">
-                            <RefreshCw className="animate-spin mx-auto mb-3 text-orange-300" size={24} />
-                            데이터를 불러오는 중입니다...
-                          </td>
-                        </tr>
-                      ) : individualRatios.length === 0 ? (
-                        <tr>
-                          <td colSpan="9" className="py-12 text-center text-gray-400">
-                            <AlertCircle className="mx-auto mb-3 text-gray-300" size={24} />
-                            선택한 조건에 해당하는 데이터가 없습니다.
-                          </td>
-                        </tr>
-                      ) : (
-                        individualRatios.map((row, idx) => (
-                          <tr key={idx} className={`transition-colors ${row.badgePremium || row.badgeActivity ? 'bg-orange-50/40' : 'hover:bg-gray-50'}`}>
-                            <td className="py-3 px-4 font-semibold text-gray-800 border-r border-gray-50">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button 
-                                  onClick={() => handleOpenModal(row['사번'], row['이름'])}
-                                  className="hover:text-orange-600 hover:underline underline-offset-4 cursor-pointer focus:outline-none transition-colors"
-                                >
-                                  {row['이름']}
-                                </button>
-                                {(row.badgePremium || row.badgeActivity) && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div>
-                                )}
-                              </div>
-                            </td>
-                            {renderProgressCell(row['TA'])}
-                            {renderProgressCell(row['AP'])}
-                            {renderProgressCell(row['P'])}
-                            {renderProgressCell(row['C'])}
-                            {renderProgressCell(row['N'])}
-                            {renderProgressCell(row['소개'])}
-                            {renderProgressCell(row['활동계'], true)}
-                            {renderProgressCell(row['보험료'])}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* 3. 본부 지능형 진단 리포트 */}
+            {/* 2. 본부 지능형 진단 리포트 */}
             {selectedTab === '본부 진단 리포트' && diagnosticData && (
               <div className="animate-in fade-in duration-500 space-y-6">
                 
@@ -918,11 +810,11 @@
                      </div>
                    </div>
                    <div className="text-xs bg-white border border-orange-200 px-3 py-1.5 rounded-full text-orange-700 font-semibold shadow-sm text-center">
-                     근원적 문제(활동량) 최우선 기준 적용
+                     복합 취약점 독립 진단 적용 (다중 해당 가능)
                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                   
                   {/* 활동량 부족군 */}
                   <div className="bg-white rounded-xl shadow-sm border border-red-200 p-5 flex flex-col h-full relative overflow-hidden">
@@ -989,7 +881,8 @@
                       <h3 className="text-base font-bold text-blue-800 flex items-center gap-2">
                         <Target size={18} className="text-blue-500" /> 클로징 취약군
                       </h3>
-                      <p className="text-xs text-blue-600/80 mt-1.5 font-medium">누적 AP 대비 N 전환 50% 미만 (동반/클로징 지원)</p>
+                      {/* 클로징 취약군 기준 텍스트 변경 */}
+                      <p className="text-xs text-blue-600/80 mt-1.5 font-medium">누적 AP 대비 N 전환 30% 미만 (동반/클로징 지원)</p>
                     </div>
                     <div className="space-y-3 flex-1 overflow-y-auto">
                       {diagnosticData.lowClosing.length === 0 ? (
@@ -1003,6 +896,35 @@
                             </div>
                             <div className="flex justify-between items-center mt-1.5 text-xs text-gray-500">
                               <span>누적 AP: {member.AP}건 ➔ N: {member.N}건</span>
+                              <span>{member['소속']}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 소개 확보 취약군 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5 flex flex-col h-full relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-emerald-400"></div>
+                    <div className="border-b border-emerald-100 pb-3 mb-4">
+                      <h3 className="text-base font-bold text-emerald-800 flex items-center gap-2">
+                        <UserPlus size={18} className="text-emerald-500" /> 소개 확보 취약군
+                      </h3>
+                      <p className="text-xs text-emerald-600/80 mt-1.5 font-medium">주간 평균 소개 2명 미만 (기존 고객 터치/스크립트 점검)</p>
+                    </div>
+                    <div className="space-y-3 flex-1 overflow-y-auto">
+                      {diagnosticData.lowReferral.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-6">해당되는 인원이 없습니다.</p>
+                      ) : (
+                        diagnosticData.lowReferral.map((member, idx) => (
+                          <div key={idx} className="bg-emerald-50/40 rounded-lg p-3 border border-emerald-100 hover:bg-emerald-50 transition-colors">
+                            <div className="flex justify-between items-center">
+                              <button onClick={() => handleOpenModal(member['사번'], member['이름'])} className="font-bold text-gray-800 hover:text-emerald-600 hover:underline underline-offset-4">{member['이름']}</button>
+                              <span className="text-xs px-2 py-1 bg-white rounded-md font-bold text-emerald-600 border border-emerald-200 shadow-sm">평균 {member.avgReferral}명</span>
+                            </div>
+                            <div className="flex justify-between items-center mt-1.5 text-xs text-gray-500">
+                              <span>총 소개 {member.소개}명 / {member.weeks.size}주</span>
                               <span>{member['소속']}</span>
                             </div>
                           </div>
