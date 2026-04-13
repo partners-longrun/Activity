@@ -5,25 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>활동 모니터링 대시보드 - 파트너스본부</title>
   
-  <!-- 1. Tailwind CSS (스타일링) -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- 2. React 라이브러리 (핵심 기능) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  
-  <!-- 3. Babel (브라우저에서 React 코드를 읽을 수 있게 변환) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-[#FFF9F5]">
-  <!-- 대시보드가 그려질 도화지 -->
   <div id="root"></div>
 
-  <!-- React 앱 코드 시작 -->
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
-    // --- 아이콘 컴포넌트 (외부 라이브러리 의존성을 없애기 위해 직접 SVG로 구현) ---
+    // --- 아이콘 컴포넌트 ---
     const RefreshCw = ({ size = 24, className = "" }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
     );
@@ -42,8 +35,10 @@
     const BarChart2 = ({ size = 24, className = "" }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
     );
+    const XIcon = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    );
 
-    // CSV 파싱 유틸리티 함수
     function parseCSV(text) {
       let p = '', row = [''], ret = [row], i = 0, r = 0, s = !0, l;
       for (l of text) {
@@ -63,7 +58,6 @@
       return ret;
     }
 
-    // 1월 1일 기준 주차 계산 로직 (월요일 시작 기준)
     function getCurrentWeekAndYear() {
       const now = new Date();
       const year = now.getFullYear();
@@ -98,6 +92,10 @@
       const [selectedYear, setSelectedYear] = useState(currentTimeInfo.year);
       const [selectedWeek, setSelectedWeek] = useState(currentTimeInfo.week);
       const [selectedDept, setSelectedDept] = useState('전체');
+
+      // 팝업(모달) 상태 관리
+      const [modalUser, setModalUser] = useState(null); // { sabun, name }
+      const [modalYear, setModalYear] = useState(currentTimeInfo.year);
 
       const fetchData = async () => {
         setLoading(true);
@@ -178,6 +176,50 @@
         return ['전체', ...depts.sort()];
       }, [data]);
 
+      // --- 개인별 연간 통계 사전 캐싱 로직 ---
+      // 이 로직 덕분에 수많은 구성원의 팝업을 눌러도 로딩 없이 즉시 뜹니다.
+      const annualStatsCache = useMemo(() => {
+        const cache = {};
+        data.forEach(row => {
+          const sabun = row['사번'];
+          const year = row['연도'];
+          if (!sabun || !year) return;
+
+          if (!cache[sabun]) cache[sabun] = {};
+          if (!cache[sabun][year]) {
+            cache[sabun][year] = {
+              expected: { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 },
+              actual: { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 },
+              activeWeeks: new Set(),
+              weeksWithN: new Set()
+            };
+          }
+
+          const isExpected = row['예정결과'] === '예정';
+          const isActual = row['예정결과'] === '결과';
+          const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
+          const week = row['주차'];
+
+          ['TA', 'AP', 'P', 'C', 'N', '소개', '활동계', '보험료'].forEach(key => {
+            const val = parseNum(row[key]);
+            if (isExpected) cache[sabun][year].expected[key] += val;
+            if (isActual) {
+              cache[sabun][year].actual[key] += val;
+              if (key === 'N' && val > 0) cache[sabun][year].weeksWithN.add(week);
+            }
+          });
+
+          if (isActual) cache[sabun][year].activeWeeks.add(week);
+        });
+        return cache;
+      }, [data]);
+
+      // 팝업 열기 핸들러
+      const handleOpenModal = (sabun, name) => {
+        setModalUser({ sabun, name });
+        setModalYear(selectedYear); // 기본적으로 대시보드에서 보던 연도 설정
+      };
+
       const filteredData = useMemo(() => {
         return data.filter(item => {
           const effectiveTab = selectedTab === '예정결과 비율' ? '결과' : selectedTab;
@@ -254,6 +296,7 @@
           );
 
           const ratios = {
+            사번: actualRow['사번'],
             이름: actualRow['이름'],
             badgePremium: actualRow.badgePremium,
             badgeActivity: actualRow.badgeActivity
@@ -292,6 +335,149 @@
               </span>
             </div>
           </td>
+        );
+      };
+
+      // --- 모달 렌더링 함수 ---
+      const renderModal = () => {
+        if (!modalUser) return null;
+
+        const sabun = modalUser.sabun;
+        const yearStats = annualStatsCache[sabun]?.[modalYear] || {
+          expected: { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 },
+          actual: { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 },
+          activeWeeks: new Set(),
+          weeksWithN: new Set()
+        };
+
+        const { expected, actual, activeWeeks, weeksWithN } = yearStats;
+
+        // 1. 예정과 결과 간 확률 계산 (결과/예정 * 100)
+        const calcRatio = (act, exp) => exp === 0 ? (act > 0 ? '100%' : '-') : Math.round((act / exp) * 100) + '%';
+        const expectedRatios = {
+          TA: calcRatio(actual.TA, expected.TA),
+          AP: calcRatio(actual.AP, expected.AP),
+          P: calcRatio(actual.P, expected.P),
+          C: calcRatio(actual.C, expected.C),
+          N: calcRatio(actual.N, expected.N),
+          소개: calcRatio(actual.소개, expected.소개),
+          활동계: calcRatio(actual.활동계, expected.활동계),
+          보험료: calcRatio(actual.보험료, expected.보험료),
+        };
+
+        // 2. 활동 간 확률 계산 (깔때기 모델 적용)
+        const calcConv = (numerator, denominator) => denominator === 0 ? '-' : Math.round((numerator / denominator) * 100) + '%';
+        const activityRatios = {
+          taAp: calcConv(actual.AP, actual.TA),
+          apP: calcConv(actual.P, actual.AP),
+          pC: calcConv(actual.C, actual.P),
+          taN: calcConv(actual.N, actual.TA),
+          apN: calcConv(actual.N, actual.AP),
+          pN: calcConv(actual.N, actual.P),
+          cN: calcConv(actual.N, actual.C),
+          소개N: calcConv(actual.소개, actual.N),
+          // 주간 유실적률: 실적이 있는 주차 / 활동을 기록한 전체 주차
+          주간유실적률: activeWeeks.size === 0 ? '-' : Math.round((weeksWithN.size / activeWeeks.size) * 100) + '%'
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setModalUser(null)}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden" onClick={e => e.stopPropagation()}>
+              
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-6 bg-orange-500 rounded-full"></div>
+                  <h2 className="text-xl font-bold text-gray-800">나의 활동 결과 통계</h2>
+                </div>
+                <button onClick={() => setModalUser(null)} className="text-gray-400 hover:text-gray-700 transition-colors">
+                  <XIcon size={24} />
+                </button>
+              </div>
+
+              <div className="p-6 bg-gray-50/50 space-y-6">
+                
+                <div className="flex items-center gap-3">
+                  <select 
+                    value={modalYear} 
+                    onChange={(e) => setModalYear(e.target.value)}
+                    className="bg-orange-50/50 border border-orange-200 text-gray-800 font-semibold rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-orange-300"
+                  >
+                    {availableYears.map(year => (
+                      <option key={year} value={year}>{year}년</option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-gray-600">
+                    <strong className="text-gray-800">{modalUser.name}</strong>님의 연간 활동 결과에 따른 각 활동 간의 통계입니다. 이 수치는 각 활동의 유효성을 가늠하는데 도움이 됩니다.
+                  </p>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm text-center border-collapse">
+                    <thead className="bg-[#f4f7fb] text-gray-700">
+                      <tr>
+                        <th className="py-3 px-4 font-semibold border-b border-r border-gray-200 w-[16%]">활동 구분</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">TA</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">AP</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">P</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">C</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">N</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">소개</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">활동 계</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">보험료 (원)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="py-3 px-4 font-medium text-gray-600 border-r border-gray-200 bg-white">예정과 결과 간 확률</td>
+                        <td className="py-3 px-2 text-gray-700">{expectedRatios.TA}</td>
+                        <td className="py-3 px-2 text-gray-700">{expectedRatios.AP}</td>
+                        <td className="py-3 px-2 text-gray-700">{expectedRatios.P}</td>
+                        <td className="py-3 px-2 text-gray-700">{expectedRatios.C}</td>
+                        <td className="py-3 px-2 text-gray-700">{expectedRatios.N}</td>
+                        <td className="py-3 px-2 text-gray-700">{expectedRatios.소개}</td>
+                        <td className="py-3 px-2 text-gray-700">{expectedRatios.활동계}</td>
+                        <td className="py-3 px-2 text-gray-700">{expectedRatios.보험료}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm text-center border-collapse">
+                    <thead className="bg-[#f4f7fb] text-gray-700">
+                      <tr>
+                        <th className="py-3 px-4 font-semibold border-b border-r border-gray-200 w-[16%]">구분</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">TA / AP</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">AP / P</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">P / C</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">TA / N</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">AP / N</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">P / N</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">C / N</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">소개 / N</th>
+                        <th className="py-3 px-2 font-semibold border-b border-gray-200">주간 유실적률</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="py-3 px-4 font-medium text-gray-600 border-r border-gray-200 bg-white">활동 간 확률</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.taAp}</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.apP}</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.pC}</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.taN}</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.apN}</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.pN}</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.cN}</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.소개N}</td>
+                        <td className="py-3 px-2 text-gray-700">{activityRatios.주간유실적률}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            </div>
+          </div>
         );
       };
 
@@ -432,7 +618,13 @@
                             <td className="py-3 px-4 font-medium text-gray-600">{row['소속']}</td>
                             <td className="py-3 px-4 font-semibold text-gray-800">
                               <div className="flex items-center justify-center gap-1.5">
-                                {row['이름']}
+                                {/* 이름 클릭 시 팝업 호출 */}
+                                <button 
+                                  onClick={() => handleOpenModal(row['사번'], row['이름'])}
+                                  className="hover:text-orange-600 hover:underline underline-offset-4 cursor-pointer focus:outline-none transition-colors"
+                                >
+                                  {row['이름']}
+                                </button>
                                 <div className="flex gap-1">
                                   {row.badgePremium && (
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200" title="보험료 1등">
@@ -512,7 +704,13 @@
                           <tr key={idx} className={`transition-colors ${row.badgePremium || row.badgeActivity ? 'bg-orange-50/40' : 'hover:bg-gray-50'}`}>
                             <td className="py-3 px-4 font-semibold text-gray-800 border-r border-gray-50">
                               <div className="flex items-center justify-center gap-1.5">
-                                {row['이름']}
+                                {/* 비율 탭에서도 이름 클릭 시 팝업 호출 */}
+                                <button 
+                                  onClick={() => handleOpenModal(row['사번'], row['이름'])}
+                                  className="hover:text-orange-600 hover:underline underline-offset-4 cursor-pointer focus:outline-none transition-colors"
+                                >
+                                  {row['이름']}
+                                </button>
                                 {(row.badgePremium || row.badgeActivity) && (
                                   <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div>
                                 )}
@@ -541,6 +739,9 @@
                 )}
               </div>
             )}
+
+            {/* 팝업 렌더링 호출 */}
+            {renderModal()}
 
           </div>
         </div>
