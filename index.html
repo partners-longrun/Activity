@@ -382,12 +382,12 @@
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setModalUser(null)}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden" onClick={e => e.stopPropagation()}>
               
               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-6 bg-orange-500 rounded-full"></div>
-                  <h2 className="text-xl font-bold text-gray-800">나의 활동 결과 통계</h2>
+                  <h2 className="text-xl font-bold text-gray-800">{modalUser.name}님의 활동 결과 통계</h2>
                 </div>
                 <button onClick={() => setModalUser(null)} className="text-gray-400 hover:text-gray-700 transition-colors">
                   <XIcon size={24} />
@@ -415,28 +415,28 @@
                   <table className="w-full text-sm text-center border-collapse">
                     <thead className="bg-[#f4f7fb] text-gray-700">
                       <tr>
-                        <th className="py-3 px-4 font-semibold border-b border-r border-gray-200 w-[16%]">활동 구분</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">TA</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">AP</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">P</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">C</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">N</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">소개</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">활동 계</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">보험료 (원)</th>
+                        <th style={{ width: '15%' }} className="py-3 px-4 font-semibold border border-gray-200">활동 구분</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">TA</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">AP</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">P</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">C</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">N</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">소개</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">활동 계</th>
+                        <th style={{ width: '15%' }} className="py-3 px-2 font-semibold border border-gray-200">보험료 (원)</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="py-3 px-4 font-medium text-gray-600 border-r border-gray-200 bg-white">예정과 결과 간 확률</td>
-                        <td className="py-3 px-2 text-gray-700">{expectedRatios.TA}</td>
-                        <td className="py-3 px-2 text-gray-700">{expectedRatios.AP}</td>
-                        <td className="py-3 px-2 text-gray-700">{expectedRatios.P}</td>
-                        <td className="py-3 px-2 text-gray-700">{expectedRatios.C}</td>
-                        <td className="py-3 px-2 text-gray-700">{expectedRatios.N}</td>
-                        <td className="py-3 px-2 text-gray-700">{expectedRatios.소개}</td>
-                        <td className="py-3 px-2 text-gray-700">{expectedRatios.활동계}</td>
-                        <td className="py-3 px-2 text-gray-700">{expectedRatios.보험료}</td>
+                        <td className="py-3 px-4 font-medium text-gray-600 border border-gray-200 bg-white">예정과 결과 간 확률</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{expectedRatios.TA}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{expectedRatios.AP}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{expectedRatios.P}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{expectedRatios.C}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{expectedRatios.N}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{expectedRatios.소개}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{expectedRatios.활동계}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{expectedRatios.보험료}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -446,30 +446,30 @@
                   <table className="w-full text-sm text-center border-collapse">
                     <thead className="bg-[#f4f7fb] text-gray-700">
                       <tr>
-                        <th className="py-3 px-4 font-semibold border-b border-r border-gray-200 w-[16%]">구분</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">TA / AP</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">AP / P</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">P / C</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">TA / N</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">AP / N</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">P / N</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">C / N</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">소개 / N</th>
-                        <th className="py-3 px-2 font-semibold border-b border-gray-200">주간 유실적률</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">구분</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">TA / AP</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">AP / P</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">P / C</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">TA / N</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">AP / N</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">P / N</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">C / N</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">소개 / N</th>
+                        <th style={{ width: '10%' }} className="py-3 px-2 font-semibold border border-gray-200">주간 유실적률</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="py-3 px-4 font-medium text-gray-600 border-r border-gray-200 bg-white">활동 간 확률</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.taAp}</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.apP}</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.pC}</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.taN}</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.apN}</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.pN}</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.cN}</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.소개N}</td>
-                        <td className="py-3 px-2 text-gray-700">{activityRatios.주간유실적률}</td>
+                        <td className="py-3 px-2 font-medium text-gray-600 border border-gray-200 bg-white">활동 간 확률</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.taAp}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.apP}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.pC}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.taN}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.apN}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.pN}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.cN}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.소개N}</td>
+                        <td className="py-3 px-2 text-gray-700 border border-gray-200">{activityRatios.주간유실적률}</td>
                       </tr>
                     </tbody>
                   </table>
