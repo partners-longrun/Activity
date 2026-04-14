@@ -47,6 +47,15 @@
     const UserPlus = ({ size = 24, className = "" }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
     );
+    const MessageCircle = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+    );
+    const Copy = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    );
+    const Check = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 6 9 17 4 12"/></svg>
+    );
 
     function parseCSV(text) {
       let p = '', row = [''], ret = [row], i = 0, r = 0, s = !0, l;
@@ -108,7 +117,11 @@
 
       // 팝업(모달) 상태 관리
       const [modalUser, setModalUser] = useState(null);
-      const [modalPeriod, setModalPeriod] = useState(50); // 연도 선택에서 기간 선택으로 변경
+      const [modalPeriod, setModalPeriod] = useState(50);
+
+      // AI 코칭 어시스턴트 상태 관리
+      const [coachingModal, setCoachingModal] = useState(null); // { member, type, metricText, message }
+      const [copied, setCopied] = useState(false);
 
       // 오늘 날짜 및 주차별 라벨 계산 로직 추가
       const today = new Date();
@@ -124,7 +137,6 @@
           if (week === currentTimeInfo.week + 1) return `${week}주차 (다음주)`;
         }
 
-        // 특정 주차의 시작일(월요일) 계산
         const jan1 = new Date(year, 0, 1);
         let day = jan1.getDay();
         let diffToMonday = day === 0 ? -6 : 1 - day;
@@ -221,14 +233,13 @@
         return ['전체', ...depts.sort()];
       }, [data]);
 
-      // 팝업창 전용 동적 기간(직전 N주) 통계 계산 로직 (기존 연간 캐싱 대체)
+      // 팝업창 전용 동적 기간(직전 N주) 통계 계산 로직
       const modalStats = useMemo(() => {
         if (!modalUser) return null;
         
         const sabun = modalUser.sabun;
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
 
-        // 1. 완전히 종료된 과거 주차만 추출 (노이즈 제거)
         const pastResultData = data.filter(d => {
           if (d['예정결과'] !== '결과') return false;
           const y = parseInt(d['연도'], 10);
@@ -245,7 +256,6 @@
           targetIdx = distinctWeeks.filter(w => w <= currentTarget).length - 1;
         }
 
-        // 2. 직전 N주(modalPeriod)에 해당하는 주차 필터링
         const targetWeeks = targetIdx >= 0 
           ? distinctWeeks.slice(Math.max(0, targetIdx - modalPeriod + 1), targetIdx + 1)
           : [];
@@ -255,7 +265,6 @@
         const activeWeeks = new Set();
         const weeksWithN = new Set();
 
-        // 3. 해당 인원의 데이터 중 타겟 주차에 속하는 값만 합산
         data.forEach(row => {
           if (row['사번'] !== sabun) return;
           const weekStr = `${row['연도']}-${String(row['주차']).padStart(2, '0')}`;
@@ -282,6 +291,60 @@
 
       const handleOpenModal = (sabun, name) => {
         setModalUser({ sabun, name });
+      };
+
+      // AI 월요 코칭 메시지 생성 로직 (대표님 철학 반영)
+      const generateCoachingMessage = (member, type, metricText) => {
+        let quote = "";
+        let analysis = "";
+        let encouragement = "";
+
+        if (type === '활동량 체크') {
+          quote = "영화 <다크 나이트>에 이런 대사가 나옵니다. '가장 어두운 시간은 해 뜨기 직전이다.'";
+          analysis = `최근 진단 기간 동안 활동계가 ${metricText}으로 다소 정체된 흐름을 보이고 있습니다. 지금의 주춤함은 분명 더 높이 뛰기 위해 움츠리는 과정일 것입니다.`;
+          encouragement = "이번 주에는 하루 1~2건씩만 기본 볼륨을 더 채워보며 함께 호흡을 끌어올려 보면 어떨까요? 현장에서의 고민이 있다면 언제든 티타임 환영입니다. 늘 응원합니다.";
+        } else if (type === '약속 체결 체크') {
+          quote = "윈스턴 처칠은 '성공이란 열정을 잃지 않고 실패를 거듭할 수 있는 능력이다'라고 했습니다.";
+          analysis = `거절을 두려워하지 않고 끊임없이 TA를 돌리시는 노고에 깊이 감사드립니다. 다만 최근 TA 대비 AP ${metricText}로, 접근 방식이나 화법에 작은 변화가 필요한 타이밍입니다.`;
+          encouragement = "파트너님의 그 뜨거운 열정에 올바른 방향만 더해진다면 폭발적인 시너지가 날 것입니다. 이번 주 지점장님과 스크립트 점검을 한 번 가볍게 진행해 보시길 권해드립니다. 곁에서 돕겠습니다.";
+        } else if (type === '클로징 체크') {
+          quote = "파울로 코엘료의 도서 <연금술사>를 보면 '무언가를 간절히 원할 때 온 우주는 당신의 소망이 실현되도록 돕는다'는 말이 있죠.";
+          analysis = `고객을 만나고 제안을 이끌어내기까지 쏟으신 정성에 박수를 보냅니다. 최근 AP 대비 N ${metricText}로, 클로징 단계의 마지막 문턱에서 아쉬운 결과들이 있었던 것 같습니다.`;
+          encouragement = "고객의 마음을 여는 그 마지막 1%의 열쇠를 찾는 과정입니다. 필요하시다면 주저하지 마시고 저나 본부 내 우수 파트너에게 동반 출장 및 지원을 요청해 주세요. 함께 해결하겠습니다.";
+        } else if (type === '소개 확보 체크') {
+          quote = "영화 <벤자민 버튼의 시간은 거꾸로 간다>에서 '우리의 삶은 우리가 만나는 사람들에 의해 정의된다'고 했습니다.";
+          analysis = `고객들에게 최상의 가치를 전달하시는 모습이 늘 든든합니다. 최근 ${metricText}으로, 파트너님의 진심을 경험한 기존 고객들과의 연결고리를 한 번 더 단단하게 다져볼 때입니다.`;
+          encouragement = "영업의 진정한 완성은 소개에서 나옵니다. 이번 주에는 새로운 만남 못지않게, 기존 고객분들께 안부 인사와 함께 가벼운 터치를 진행해 보는 것은 어떨까요? 파트너님의 진심은 반드시 전달될 것입니다.";
+        }
+
+        const message = `[파트너스본부 주간 코칭 메시지]\n\n${member.이름} 파트너님, 지난 한 주도 현장에서 고군분투하시느라 정말 고생 많으셨습니다.\n\n${quote}\n\n${analysis}\n\n${encouragement}`;
+        
+        setCoachingModal({ member, type, metricText, message });
+        setCopied(false);
+      };
+
+      const handleCopyMessage = () => {
+        if (coachingModal && coachingModal.message) {
+          navigator.clipboard.writeText(coachingModal.message)
+            .then(() => setCopied(true))
+            .catch(err => console.error('Failed to copy text: ', err));
+          
+          // 폴백 로직 (iframe 환경 대비)
+          const textArea = document.createElement("textarea");
+          textArea.value = coachingModal.message;
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          try {
+            document.execCommand('copy');
+            setCopied(true);
+          } catch (err) {
+            console.error('Fallback: Oops, unable to copy', err);
+          }
+          document.body.removeChild(textArea);
+          
+          setTimeout(() => setCopied(false), 2000);
+        }
       };
 
       const filteredData = useMemo(() => {
@@ -345,20 +408,18 @@
         return [...result, ...restWithBadges];
       }, [filteredData, selectedTab]);
 
-      // --- 본부 지능형 진단 리포트 로직 (동적 기간 분석 적용) ---
       const diagnosticData = useMemo(() => {
         if (selectedTab !== '본부 진단 리포트') return null;
 
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
         
         const groups = {
-          lowActivity: [],     // 활동량 부족군
-          lowAppointment: [],  // 약속 체결 취약군
-          lowClosing: [],      // 클로징 취약군
-          lowReferral: []      // 소개 확보 취약군
+          lowActivity: [],
+          lowAppointment: [],
+          lowClosing: [],
+          lowReferral: []
         };
 
-        // 1. 결과 데이터가 존재하며, 이번주/다음주가 아닌 완전히 종료된 과거 주차만 추출
         const pastResultData = data.filter(d => {
           if (d['예정결과'] !== '결과') return false;
           const y = parseInt(d['연도'], 10);
@@ -368,28 +429,23 @@
 
         const distinctWeeks = [...new Set(pastResultData.map(d => `${d['연도']}-${String(d['주차']).padStart(2, '0')}`))].sort();
         
-        // 2. 현재 선택된 기준 주차 찾기
         const currentTarget = `${selectedYear}-${String(selectedWeek).padStart(2, '0')}`;
         let targetIdx = distinctWeeks.indexOf(currentTarget);
         
-        // 선택된 주차에 결과 데이터가 없으면, 가장 가까운 과거 주차를 찾음
         if (targetIdx === -1) {
           targetIdx = distinctWeeks.filter(w => w <= currentTarget).length - 1;
         }
 
-        // 3. 진단 기간(직전 N주)에 해당하는 주차 목록 필터링
         const targetWeeks = targetIdx >= 0 
           ? distinctWeeks.slice(Math.max(0, targetIdx - diagnosticPeriod + 1), targetIdx + 1)
           : [];
 
-        // 4. 해당 기간, 조건에 맞는 결과 데이터만 필터링
         const relevantData = pastResultData.filter(item => {
           if (selectedDept !== '전체' && item['소속'] !== selectedDept) return false;
           const weekStr = `${item['연도']}-${String(item['주차']).padStart(2, '0')}`;
           return targetWeeks.includes(weekStr);
         });
 
-        // 5. 인원별 누적 합계 계산
         const agg = {};
         relevantData.forEach(row => {
           const sabun = row['사번'];
@@ -404,12 +460,9 @@
           agg[sabun].weeks.add(`${row['연도']}-${row['주차']}`);
         });
 
-        // 6. 지표 계산 및 심각도에 따른 그룹 분류
         Object.values(agg).forEach(member => {
-          // 해당 인원이 활동을 기록한 주차 수로 나누어 '주평균' 활동계 산출
           const avgActivity = member.활동계 / member.weeks.size || 0;
           const avgReferral = member.소개 / member.weeks.size || 0;
-          // 누적 볼륨 기반의 정확한 전환율 산출
           const taApRate = member.TA > 0 ? (member.AP / member.TA) * 100 : (member.AP > 0 ? 100 : 0);
           const apNRate = member.AP > 0 ? (member.N / member.AP) * 100 : (member.N > 0 ? 100 : 0);
 
@@ -421,22 +474,12 @@
             apNRate: Math.round(apNRate)
           };
 
-          // 복합 취약점 독립 진단 (해당되는 모든 취약군에 중복 노출 허용)
-          if (memberData.avgActivity < 15) {
-            groups.lowActivity.push(memberData);
-          }
-          if (memberData.taApRate < 50) {
-            groups.lowAppointment.push(memberData);
-          }
-          if (memberData.apNRate < 30) { // 클로징 취약군 30% 미만으로 하향 조정
-            groups.lowClosing.push(memberData);
-          }
-          if (memberData.avgReferral < 2) {
-            groups.lowReferral.push(memberData);
-          }
+          if (memberData.avgActivity < 15) groups.lowActivity.push(memberData);
+          if (memberData.taApRate < 50) groups.lowAppointment.push(memberData);
+          if (memberData.apNRate < 30) groups.lowClosing.push(memberData);
+          if (memberData.avgReferral < 2) groups.lowReferral.push(memberData);
         });
 
-        // 각 그룹 내 심각도 기준 오름차순 정렬 (수치가 낮을수록 위험군이므로 상단 배치)
         groups.lowActivity.sort((a, b) => a.avgActivity - b.avgActivity);
         groups.lowAppointment.sort((a, b) => a.taApRate - b.taApRate);
         groups.lowClosing.sort((a, b) => a.apNRate - b.apNRate);
@@ -445,12 +488,12 @@
         return groups;
       }, [data, selectedTab, selectedYear, selectedWeek, selectedDept, diagnosticPeriod]);
 
+      // --- 통계 팝업 렌더링 ---
       const renderModal = () => {
         if (!modalUser || !modalStats) return null;
 
         const { expected, actual, activeWeeks, weeksWithN } = modalStats;
 
-        // 천 단위 콤마 포맷팅 헬퍼 함수
         const formatNum = (num) => num ? num.toLocaleString() : '0';
 
         const calcRatio = (act, exp) => exp === 0 ? (act > 0 ? '100%' : '-') : Math.round((act / exp) * 100) + '%';
@@ -602,6 +645,60 @@
         );
       };
 
+      // --- AI 코칭 어시스턴트 모달 렌더링 ---
+      const renderCoachingModal = () => {
+        if (!coachingModal) return null;
+
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200" onClick={() => setCoachingModal(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-orange-100" onClick={e => e.stopPropagation()}>
+              
+              <div className="bg-gradient-to-r from-orange-500 to-orange-400 p-5 flex justify-between items-center text-white">
+                <div className="flex items-center gap-2.5">
+                  <MessageCircle size={22} className="text-orange-50" />
+                  <h2 className="text-lg font-bold">AI 월요 코칭 어시스턴트</h2>
+                </div>
+                <button onClick={() => setCoachingModal(null)} className="text-orange-100 hover:text-white transition-colors">
+                  <XIcon size={24} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="flex items-start gap-3 bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                      <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-xs">타겟 진단</span>
+                      {coachingModal.member.이름} 파트너 ({coachingModal.type})
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      대표님의 철학(명언/도서)과 파트너님의 데이터({coachingModal.metricText})를 융합하여 작성된 맞춤형 격려 메시지 초안입니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <textarea 
+                    className="w-full h-64 p-4 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-300 resize-none leading-relaxed"
+                    value={coachingModal.message}
+                    onChange={(e) => setCoachingModal({...coachingModal, message: e.target.value})}
+                  />
+                  <div className="absolute bottom-3 right-3">
+                    <button 
+                      onClick={handleCopyMessage}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all ${
+                        copied ? 'bg-emerald-500 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {copied ? <><Check size={14}/> 복사 완료</> : <><Copy size={14}/> 복사하기</>}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
       return (
         <div className="min-h-screen bg-[#FFF9F5] p-6 font-sans text-gray-800">
           <div className="max-w-7xl mx-auto space-y-6">
@@ -617,7 +714,6 @@
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                {/* 우측 상단 오늘 날짜 컴포넌트 추가 */}
                 <span className="text-sm font-semibold text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm flex items-center gap-1.5">
                   <Calendar size={14} className="text-gray-400" />
                   {formattedToday}
@@ -684,7 +780,6 @@
                     onChange={(e) => setSelectedWeek(e.target.value)}
                     className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
                   >
-                    {/* 주차 라벨 포맷팅 적용 */}
                     {availableWeeks.map(week => (
                       <option key={week} value={week}>{getWeekLabel(week, selectedYear)}</option>
                     ))}
@@ -802,7 +897,6 @@
                      <div>
                        <div className="flex items-center gap-3">
                          <h2 className="text-lg font-bold text-gray-800">본부 지능형 진단 리포트</h2>
-                         {/* 진단 기간 설정 콤보박스 */}
                          <select 
                            value={diagnosticPeriod}
                            onChange={(e) => setDiagnosticPeriod(Number(e.target.value))}
@@ -824,26 +918,36 @@
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                   
-                  {/* 활동량 부족군 */}
-                  <div className="bg-white rounded-xl shadow-sm border border-red-200 p-5 flex flex-col h-full relative overflow-hidden">
+                  {/* 활동량 체크 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-red-200 p-5 flex flex-col h-full relative overflow-hidden group hover:border-red-300 transition-colors">
                     <div className="absolute top-0 left-0 w-full h-1 bg-red-400"></div>
                     <div className="border-b border-red-100 pb-3 mb-4">
                       <h3 className="text-base font-bold text-red-800 flex items-center gap-2">
-                        <TrendingDown size={18} className="text-red-500" /> 활동량 부족군
+                        <TrendingDown size={18} className="text-red-500" /> 활동량 체크
                       </h3>
-                      <p className="text-xs text-red-600/80 mt-1.5 font-medium">주간 평균 활동계 15건 미만 (기본 볼륨 증대)</p>
+                      {/* 설명글 줄바꿈 처리 */}
+                      <p className="text-xs text-red-600/80 mt-1.5 font-medium leading-relaxed">
+                        주간 평균 활동계 15건 미만<br/>
+                        <span className="text-gray-400 font-normal">(기본 볼륨 증대)</span>
+                      </p>
                     </div>
-                    <div className="space-y-3 flex-1 overflow-y-auto">
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                       {diagnosticData.lowActivity.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-6">해당되는 인원이 없습니다.</p>
                       ) : (
                         diagnosticData.lowActivity.map((member, idx) => (
-                          <div key={idx} className="bg-red-50/40 rounded-lg p-3 border border-red-100 hover:bg-red-50 transition-colors">
+                          <div key={idx} className="bg-red-50/40 rounded-lg p-3 border border-red-100 hover:bg-red-50 transition-colors flex flex-col gap-2">
                             <div className="flex justify-between items-center">
                               <button onClick={() => handleOpenModal(member['사번'], member['이름'])} className="font-bold text-gray-800 hover:text-red-600 hover:underline underline-offset-4">{member['이름']}</button>
-                              <span className="text-xs px-2 py-1 bg-white rounded-md font-bold text-red-600 border border-red-200 shadow-sm">평균 {member.avgActivity}건</span>
+                              {/* 기존 배지를 코칭 메시지 호출 버튼으로 변경 (은닉) */}
+                              <button 
+                                onClick={() => generateCoachingMessage(member, '활동량 체크', `평균 ${member.avgActivity}건`)}
+                                className="text-xs px-2 py-1 bg-white rounded-md font-bold text-red-600 border border-red-200 shadow-sm hover:bg-red-50 transition-colors cursor-pointer"
+                              >
+                                평균 {member.avgActivity}건
+                              </button>
                             </div>
-                            <div className="flex justify-between items-center mt-1.5 text-xs text-gray-500">
+                            <div className="flex justify-between items-end mt-0.5 text-xs text-gray-500">
                               <span>총 활동 {member.활동계}건 / {member.weeks.size}주</span>
                               <span>{member['소속']}</span>
                             </div>
@@ -853,27 +957,36 @@
                     </div>
                   </div>
 
-                  {/* 약속 체결 취약군 */}
-                  <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-5 flex flex-col h-full relative overflow-hidden">
+                  {/* 약속 체결 체크 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-5 flex flex-col h-full relative overflow-hidden group hover:border-amber-300 transition-colors">
                     <div className="absolute top-0 left-0 w-full h-1 bg-amber-400"></div>
                     <div className="border-b border-amber-100 pb-3 mb-4">
                       <h3 className="text-base font-bold text-amber-800 flex items-center gap-2">
-                        <Users size={18} className="text-amber-500" /> 약속 체결 취약군
+                        <Users size={18} className="text-amber-500" /> 약속 체결 체크
                       </h3>
-                      <p className="text-xs text-amber-600/80 mt-1.5 font-medium">누적 TA 대비 AP 전환 50% 미만 (스크립트 점검)</p>
+                      <p className="text-xs text-amber-600/80 mt-1.5 font-medium leading-relaxed">
+                        누적 TA 대비 AP 전환 50% 미만<br/>
+                        <span className="text-gray-400 font-normal">(스크립트 점검)</span>
+                      </p>
                     </div>
-                    <div className="space-y-3 flex-1 overflow-y-auto">
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                       {diagnosticData.lowAppointment.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-6">해당되는 인원이 없습니다.</p>
                       ) : (
                         diagnosticData.lowAppointment.map((member, idx) => (
-                          <div key={idx} className="bg-amber-50/40 rounded-lg p-3 border border-amber-100 hover:bg-amber-50 transition-colors">
+                          <div key={idx} className="bg-amber-50/40 rounded-lg p-3 border border-amber-100 hover:bg-amber-50 transition-colors flex flex-col gap-2">
                             <div className="flex justify-between items-center">
                               <button onClick={() => handleOpenModal(member['사번'], member['이름'])} className="font-bold text-gray-800 hover:text-amber-600 hover:underline underline-offset-4">{member['이름']}</button>
-                              <span className="text-xs px-2 py-1 bg-white rounded-md font-bold text-amber-600 border border-amber-200 shadow-sm">전환율 {member.taApRate}%</span>
+                              {/* 기존 배지를 코칭 메시지 호출 버튼으로 변경 (은닉) */}
+                              <button 
+                                onClick={() => generateCoachingMessage(member, '약속 체결 체크', `전환율 ${member.taApRate}%`)}
+                                className="text-xs px-2 py-1 bg-white rounded-md font-bold text-amber-600 border border-amber-200 shadow-sm hover:bg-amber-50 transition-colors cursor-pointer"
+                              >
+                                전환율 {member.taApRate}%
+                              </button>
                             </div>
-                            <div className="flex justify-between items-center mt-1.5 text-xs text-gray-500">
-                              <span>누적 TA: {member.TA}건 ➔ AP: {member.AP}건</span>
+                            <div className="flex justify-between items-end mt-0.5 text-xs text-gray-500">
+                              <span>누적 TA: {member.TA} ➔ AP: {member.AP}</span>
                               <span>{member['소속']}</span>
                             </div>
                           </div>
@@ -882,28 +995,36 @@
                     </div>
                   </div>
 
-                  {/* 클로징 취약군 */}
-                  <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-5 flex flex-col h-full relative overflow-hidden">
+                  {/* 클로징 체크 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-5 flex flex-col h-full relative overflow-hidden group hover:border-blue-300 transition-colors">
                     <div className="absolute top-0 left-0 w-full h-1 bg-blue-400"></div>
                     <div className="border-b border-blue-100 pb-3 mb-4">
                       <h3 className="text-base font-bold text-blue-800 flex items-center gap-2">
-                        <Target size={18} className="text-blue-500" /> 클로징 취약군
+                        <Target size={18} className="text-blue-500" /> 클로징 체크
                       </h3>
-                      {/* 클로징 취약군 기준 텍스트 변경 */}
-                      <p className="text-xs text-blue-600/80 mt-1.5 font-medium">누적 AP 대비 N 전환 30% 미만 (동반/클로징 지원)</p>
+                      <p className="text-xs text-blue-600/80 mt-1.5 font-medium leading-relaxed">
+                        누적 AP 대비 N 전환 30% 미만<br/>
+                        <span className="text-gray-400 font-normal">(동반/클로징 지원)</span>
+                      </p>
                     </div>
-                    <div className="space-y-3 flex-1 overflow-y-auto">
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                       {diagnosticData.lowClosing.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-6">해당되는 인원이 없습니다.</p>
                       ) : (
                         diagnosticData.lowClosing.map((member, idx) => (
-                          <div key={idx} className="bg-blue-50/40 rounded-lg p-3 border border-blue-100 hover:bg-blue-50 transition-colors">
+                          <div key={idx} className="bg-blue-50/40 rounded-lg p-3 border border-blue-100 hover:bg-blue-50 transition-colors flex flex-col gap-2">
                             <div className="flex justify-between items-center">
                               <button onClick={() => handleOpenModal(member['사번'], member['이름'])} className="font-bold text-gray-800 hover:text-blue-600 hover:underline underline-offset-4">{member['이름']}</button>
-                              <span className="text-xs px-2 py-1 bg-white rounded-md font-bold text-blue-600 border border-blue-200 shadow-sm">전환율 {member.apNRate}%</span>
+                              {/* 기존 배지를 코칭 메시지 호출 버튼으로 변경 (은닉) */}
+                              <button 
+                                onClick={() => generateCoachingMessage(member, '클로징 체크', `전환율 ${member.apNRate}%`)}
+                                className="text-xs px-2 py-1 bg-white rounded-md font-bold text-blue-600 border border-blue-200 shadow-sm hover:bg-blue-50 transition-colors cursor-pointer"
+                              >
+                                전환율 {member.apNRate}%
+                              </button>
                             </div>
-                            <div className="flex justify-between items-center mt-1.5 text-xs text-gray-500">
-                              <span>누적 AP: {member.AP}건 ➔ N: {member.N}건</span>
+                            <div className="flex justify-between items-end mt-0.5 text-xs text-gray-500">
+                              <span>누적 AP: {member.AP} ➔ N: {member.N}</span>
                               <span>{member['소속']}</span>
                             </div>
                           </div>
@@ -912,26 +1033,35 @@
                     </div>
                   </div>
 
-                  {/* 소개 확보 취약군 */}
-                  <div className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5 flex flex-col h-full relative overflow-hidden">
+                  {/* 소개 확보 체크 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5 flex flex-col h-full relative overflow-hidden group hover:border-emerald-300 transition-colors">
                     <div className="absolute top-0 left-0 w-full h-1 bg-emerald-400"></div>
                     <div className="border-b border-emerald-100 pb-3 mb-4">
                       <h3 className="text-base font-bold text-emerald-800 flex items-center gap-2">
-                        <UserPlus size={18} className="text-emerald-500" /> 소개 확보 취약군
+                        <UserPlus size={18} className="text-emerald-500" /> 소개 확보 체크
                       </h3>
-                      <p className="text-xs text-emerald-600/80 mt-1.5 font-medium">주간 평균 소개 2명 미만 (기존 고객 터치/스크립트 점검)</p>
+                      <p className="text-xs text-emerald-600/80 mt-1.5 font-medium leading-relaxed">
+                        주간 평균 소개 2명 미만<br/>
+                        <span className="text-gray-400 font-normal">(기존 고객 터치/스크립트 점검)</span>
+                      </p>
                     </div>
-                    <div className="space-y-3 flex-1 overflow-y-auto">
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                       {diagnosticData.lowReferral.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-6">해당되는 인원이 없습니다.</p>
                       ) : (
                         diagnosticData.lowReferral.map((member, idx) => (
-                          <div key={idx} className="bg-emerald-50/40 rounded-lg p-3 border border-emerald-100 hover:bg-emerald-50 transition-colors">
+                          <div key={idx} className="bg-emerald-50/40 rounded-lg p-3 border border-emerald-100 hover:bg-emerald-50 transition-colors flex flex-col gap-2">
                             <div className="flex justify-between items-center">
                               <button onClick={() => handleOpenModal(member['사번'], member['이름'])} className="font-bold text-gray-800 hover:text-emerald-600 hover:underline underline-offset-4">{member['이름']}</button>
-                              <span className="text-xs px-2 py-1 bg-white rounded-md font-bold text-emerald-600 border border-emerald-200 shadow-sm">평균 {member.avgReferral}명</span>
+                              {/* 기존 배지를 코칭 메시지 호출 버튼으로 변경 (은닉) */}
+                              <button 
+                                onClick={() => generateCoachingMessage(member, '소개 확보 체크', `평균 ${member.avgReferral}명`)}
+                                className="text-xs px-2 py-1 bg-white rounded-md font-bold text-emerald-600 border border-emerald-200 shadow-sm hover:bg-emerald-50 transition-colors cursor-pointer"
+                              >
+                                평균 {member.avgReferral}명
+                              </button>
                             </div>
-                            <div className="flex justify-between items-center mt-1.5 text-xs text-gray-500">
+                            <div className="flex justify-between items-end mt-0.5 text-xs text-gray-500">
                               <span>총 소개 {member.소개}명 / {member.weeks.size}주</span>
                               <span>{member['소속']}</span>
                             </div>
@@ -947,6 +1077,7 @@
 
             {/* 팝업 렌더링 호출 */}
             {renderModal()}
+            {renderCoachingModal()}
 
           </div>
         </div>
