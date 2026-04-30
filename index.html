@@ -108,7 +108,7 @@
     }
 
     function App() {
-      const SHEET_ID = '1k1mqDWo__CtnKeRLE-U5RrnW43bNn8atyfQC8xV3BSo';
+      const SHEET_ID = '1G1rHHaf7ct5zkpsTDzGvOJGuUI9FXbG7fK1C8U1TmpE';
       const SHEET_NAME = 'Activity';
       const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_NAME}`;
 
@@ -223,12 +223,12 @@
       const loadMockData = () => {
         setUsingMockData(true);
         const mock = [
-          { 소속: '1지점', 사번: '2023001', 이름: '김대표', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '예정', TA: '10', AP: '5', P: '3', C: '1', N: '1', 소개: '2', 활동계: '22', 보험료: '1,500,000' },
-          { 소속: '1지점', 사번: '2023001', 이름: '김대표', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '8', AP: '4', P: '2', C: '1', N: '3', 소개: '1', 활동계: '19', 보험료: '1,200,000' },
-          { 소속: '1지점', 사번: '2023002', 이름: '이파트너', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '예정', TA: '15', AP: '8', P: '4', C: '2', N: '0', 소개: '1', 활동계: '30', 보험료: '2,000,000' },
-          { 소속: '1지점', 사번: '2023002', 이름: '이파트너', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '16', AP: '9', P: '5', C: '2', N: '1', 소개: '2', 활동계: '35', 보험료: '2,500,000' },
-          { 소속: '2지점', 사번: '2023003', 이름: '박신입', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '5', AP: '1', P: '0', C: '0', N: '0', 소개: '0', 활동계: '6', 보험료: '0' },
-          { 소속: '2지점', 사번: '2023004', 이름: '최도전', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '20', AP: '8', P: '4', C: '1', N: '0', 소개: '0', 활동계: '33', 보험료: '500,000' },
+          { 소속: '1지점', 사번: '2023001', 이름: '김대표', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '예정', TA: '10', AP: '5', P: '3', C: '1', N: '1', 소개: '2', 활동계: '22', 보험료: '1,500,000', 저장일시: '', 마감일시: '' },
+          { 소속: '1지점', 사번: '2023001', 이름: '김대표', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '8', AP: '4', P: '2', C: '1', N: '3', 소개: '1', 활동계: '19', 보험료: '1,200,000', 저장일시: '', 마감일시: '' },
+          { 소속: '1지점', 사번: '2023002', 이름: '이파트너', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '예정', TA: '15', AP: '8', P: '4', C: '2', N: '0', 소개: '1', 활동계: '30', 보험료: '2,000,000', 저장일시: '', 마감일시: '' },
+          { 소속: '1지점', 사번: '2023002', 이름: '이파트너', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '16', AP: '9', P: '5', C: '2', N: '1', 소개: '2', 활동계: '35', 보험료: '2,500,000', 저장일시: '', 마감일시: '' },
+          { 소속: '2지점', 사번: '2023003', 이름: '박신입', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '5', AP: '1', P: '0', C: '0', N: '0', 소개: '0', 활동계: '6', 보험료: '0', 저장일시: '', 마감일시: '' },
+          { 소속: '2지점', 사번: '2023004', 이름: '최도전', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '20', AP: '8', P: '4', C: '1', N: '0', 소개: '0', 활동계: '33', 보험료: '500,000', 저장일시: '', 마감일시: '' },
         ];
         setData(mock);
       };
