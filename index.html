@@ -637,6 +637,11 @@
         return groups;
       }, [data, selectedTab, selectedYear, selectedWeek, selectedDept, diagnosticPeriod]);
 
+      // 퀵 액션 버튼의 활성화(Active) 상태를 판단하기 위한 로직 추가
+      const isThisWeekExpected = selectedTab === '예정' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week);
+      const isThisWeekResult = selectedTab === '결과' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week);
+      const isNextWeekExpected = selectedTab === '예정' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week + 1);
+
       // --- 통계 팝업 렌더링 ---
       const renderModal = () => {
         if (!modalUser || !modalStats) return null;
@@ -948,8 +953,9 @@
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5">
                 
                 {/* 좌측: 탭 메뉴 및 퀵 액션 버튼 */}
-                <div className="space-y-3 w-full xl:w-auto">
-                  <div className="flex bg-gray-50 p-1 rounded-xl w-full xl:w-96">
+                <div className="flex flex-col space-y-2 w-full xl:w-96">
+                  {/* 메인 탭 */}
+                  <div className="flex bg-gray-50 p-1 rounded-xl w-full">
                     {['예정', '결과', '본부 진단 리포트'].map(tab => (
                       <button
                         key={tab}
@@ -965,25 +971,37 @@
                     ))}
                   </div>
                   
-                  {/* 퀵 액션 버튼 그룹 */}
-                  <div className="flex items-center gap-2">
+                  {/* 퀵 액션 버튼 그룹 (폭 일치 및 활성화 스타일 적용) */}
+                  <div className="flex gap-2 w-full">
                     <button 
                       onClick={() => handleQuickAction('예정', 0)}
-                      className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-white hover:bg-orange-50 hover:text-orange-600 text-gray-600 transition-colors shadow-sm flex items-center gap-1"
+                      className={`flex-1 flex justify-center items-center gap-1.5 py-2 text-xs font-bold rounded-lg border shadow-sm transition-all ${
+                        isThisWeekExpected 
+                          ? 'bg-orange-50 border-orange-400 text-orange-700 ring-1 ring-orange-400' 
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'
+                      }`}
                     >
-                      <Zap size={14} className="text-orange-400" /> 이번주 예정
+                      <Zap size={14} className={isThisWeekExpected ? "text-orange-500" : "text-orange-400"} /> 이번주 예정
                     </button>
                     <button 
                       onClick={() => handleQuickAction('결과', 0)}
-                      className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-white hover:bg-orange-50 hover:text-orange-600 text-gray-600 transition-colors shadow-sm flex items-center gap-1"
+                      className={`flex-1 flex justify-center items-center gap-1.5 py-2 text-xs font-bold rounded-lg border shadow-sm transition-all ${
+                        isThisWeekResult 
+                          ? 'bg-orange-50 border-orange-400 text-orange-700 ring-1 ring-orange-400' 
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'
+                      }`}
                     >
-                      <Zap size={14} className="text-orange-400" /> 이번주 결과
+                      <Zap size={14} className={isThisWeekResult ? "text-orange-500" : "text-orange-400"} /> 이번주 결과
                     </button>
                     <button 
                       onClick={() => handleQuickAction('예정', 1)}
-                      className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-white hover:bg-orange-50 hover:text-orange-600 text-gray-600 transition-colors shadow-sm flex items-center gap-1"
+                      className={`flex-1 flex justify-center items-center gap-1.5 py-2 text-xs font-bold rounded-lg border shadow-sm transition-all ${
+                        isNextWeekExpected 
+                          ? 'bg-orange-50 border-orange-400 text-orange-700 ring-1 ring-orange-400' 
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'
+                      }`}
                     >
-                      <Zap size={14} className="text-orange-400" /> 다음주 예정
+                      <Zap size={14} className={isNextWeekExpected ? "text-orange-500" : "text-orange-400"} /> 다음주 예정
                     </button>
                   </div>
                 </div>
