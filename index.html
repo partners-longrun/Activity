@@ -1390,6 +1390,11 @@
                 </div>
               )}
             </div>
+
+            {/* 누락되었던 팝업 렌더링 호출 복구 */}
+            {renderModal()}
+            {renderCoachingModal()}
+
           </div>
         </div>
       );
