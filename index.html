@@ -326,6 +326,13 @@
         setModalUser({ sabun, name });
       };
 
+      // 금액 천 단위 콤마 포맷팅 헬퍼 함수
+      const formatCurrency = (val) => {
+        if (!val && val !== 0) return '0';
+        const num = Number(String(val).replace(/[^0-9.-]+/g, ""));
+        return isNaN(num) ? '0' : num.toLocaleString();
+      };
+
       // --- 공통 fetch retry 함수 ---
       const fetchWithRetry = async (url, options, maxRetries = 5) => {
         let retries = 0;
@@ -1177,7 +1184,7 @@
                               <td className={`py-3 px-2 text-base ${Number(row['N']) >= 3 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{row['N']}</td>
                               <td className="py-3 px-2 text-gray-600 text-base">{row['소개']}</td>
                               <td className="py-3 px-3 font-bold text-orange-600 bg-orange-50/30 text-base">{row['활동계']}</td>
-                              <td className="py-3 px-4 font-medium text-gray-700 text-right pr-6 text-base">{row['보험료']}</td>
+                              <td className="py-3 px-4 font-medium text-gray-700 text-right pr-6 text-base">{formatCurrency(row['보험료'])}</td>
                             </tr>
                           ))
                         )}
