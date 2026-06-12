@@ -24,6 +24,7 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
+    // --- SVG 아이콘 컴포넌트 정의 ---
     const RefreshCw = ({ size = 24, className = "" }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
     );
@@ -76,42 +77,53 @@
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
     );
 
+    // --- 전역 유틸리티 및 헬퍼 함수 정의 ---
+    function parseCSV(text) {
+      let p = '', row = [''], ret = [row], i = 0, r = 0, s = !0, l;
+      for (l of text) {
+        if ('"' === l) {
+          if (s && l === p) row[i] += l;
+          s = !s;
+        } else if (',' === l && s) l = row[++i] = '';
+        else if ('\n' === l && s) {
+          if ('\r' === p) row[i] = row[i].slice(0, -1);
+          row = ret[++r] = [l = '']; i = 0;
+        } else row[i] += l;
+        p = l;
+      }
+      if (ret.length > 0 && ret[ret.length - 1].length === 1 && ret[ret.length - 1][0] === '') {
+        ret.pop();
+      }
+      return ret;
+    }
+
     function getCurrentWeekAndYear() {
       const now = new Date();
       const year = now.getFullYear();
       const jan1 = new Date(year, 0, 1);
-      
       let day = jan1.getDay();
       let diffToMonday = day === 0 ? -6 : 1 - day; 
-      
       const firstWeekStart = new Date(year, 0, 1 + diffToMonday);
       firstWeekStart.setHours(0, 0, 0, 0);
-      
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const diff = today - firstWeekStart;
       const week = Math.floor(diff / (1000 * 60 * 60 * 24 * 7)) + 1;
-      
       return { year, week };
     }
 
-    // 주차 기준 연월 판정 헬퍼 함수 (월간 실적 탭 분석용)
     function getWeekYearMonth(yearNum, weekNum) {
       const yr = parseInt(yearNum, 10);
       const wk = parseInt(weekNum, 10);
       if (isNaN(yr) || isNaN(wk)) return null;
-      
       const jan1 = new Date(yr, 0, 1);
       let day = jan1.getDay();
       let diffToMonday = day === 0 ? -6 : 1 - day;
       const firstMon = new Date(yr, 0, 1 + diffToMonday);
-      
       const targetDate = new Date(firstMon);
-      // 주차의 중간 요일(목요일)을 기준으로 연월을 판정하여 월간 실적 왜곡 방지
       targetDate.setDate(targetDate.getDate() + (wk - 1) * 7 + 3); 
       return `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
     }
 
-    // 3개월 연월 리스트 생성 헬퍼
     function getThreeMonthsList(anchorMonth) {
       if (!anchorMonth) return [];
       const [yStr, mStr] = anchorMonth.split('-');
@@ -131,6 +143,14 @@
       return `${parseInt(m, 10)}월`;
     }
 
+    // 금액 및 숫자 천 단위 콤마 포맷팅 글로벌 함수 (오류 해결 핵심)
+    function formatCurrency(val) {
+      if (!val && val !== 0) return '0';
+      const num = Number(String(val).replace(/[^0-9.-]+/g, ""));
+      return isNaN(num) ? '0' : num.toLocaleString();
+    }
+
+    // --- React SVG 트렌드 차트 컴포넌트 ---
     const SvgTrendChart = ({ labels, values, suffix, colorClass = "orange" }) => {
       const maxVal = Math.max(...values, 1);
       const minVal = 0; 
@@ -176,18 +196,13 @@
             </linearGradient>
           </defs>
           
-          {/* 가로 보조선 그리기 */}
           <line x1={padding.left} y1={padding.top} x2={width - padding.right} y2={padding.top} stroke="#f1f5f9" strokeWidth="1" />
           <line x1={padding.left} y1={(padding.top + height - padding.bottom)/2} x2={width - padding.right} y2={(padding.top + height - padding.bottom)/2} stroke="#f1f5f9" strokeWidth="1" />
           <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} stroke="#e2e8f0" strokeWidth="1.5" />
 
-          {/* 그라데이션 영역 채우기 */}
           <path d={areaD} fill={colorTheme.fill} />
-          
-          {/* 메인 꺾은선 그리기 */}
           <path d={pathD} fill="none" stroke={colorTheme.stroke} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
           
-          {/* 노드 및 데이터 라벨 렌더링 */}
           {points.map((p, idx) => (
             <g key={idx}>
               <circle cx={p.x} cy={p.y} r="5.5" fill={colorTheme.dot} stroke="#fff" strokeWidth="2.5" className="drop-shadow-sm" />
@@ -203,6 +218,7 @@
       );
     };
 
+    // --- 메인 App 컴포넌트 ---
     function App() {
       const SHEET_ID = '1G1rHHaf7ct5zkpsTDzGvOJGuUI9FXbG7fK1C8U1TmpE';
       const SHEET_NAME = 'Activity';
@@ -215,12 +231,12 @@
       const [error, setError] = useState(null);
       const [usingMockData, setUsingMockData] = useState(false);
 
-      // 필터 상태
+      // 필터 및 화면 설정 상태
       const [selectedTab, setSelectedTab] = useState('결과'); 
       const [selectedYear, setSelectedYear] = useState(String(currentTimeInfo.year));
       const [selectedWeek, setSelectedWeek] = useState(String(currentTimeInfo.week));
       const [selectedDept, setSelectedDept] = useState('전체');
-      const [sortBy, setSortBy] = useState('사번순'); // 디폴트: 사번순
+      const [sortBy, setSortBy] = useState('사번순'); 
 
       // 커스텀 토스트 알림 상태
       const [toast, setToast] = useState(null);
@@ -232,24 +248,23 @@
       const [modalUser, setModalUser] = useState(null);
       const [modalPeriod, setModalPeriod] = useState(50);
 
-      // AI 코칭 및 회의 브리핑 상태 관리
+      // AI 격려 메시지 및 스마트 브리핑 생성용 상태
       const [coachingModal, setCoachingModal] = useState(null); 
       const [customContext, setCustomContext] = useState(""); 
       const [isGenerating, setIsGenerating] = useState(false);
-      
       const [aiBriefing, setAiBriefing] = useState("");
       const [isBriefingGenerating, setIsBriefingGenerating] = useState(false);
-
       const [apiError, setApiError] = useState("");
       const [copied, setCopied] = useState(false);
-
-      const today = new Date();
-      const formattedToday = today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
 
       const showToast = (message, type = "info") => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 3500);
       };
+
+      // 오늘 날짜 및 주차별 라벨 계산 (오류 수정 지점)
+      const today = new Date();
+      const formattedToday = today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
 
       const getWeekLabel = (weekNumStr, yearNumStr) => {
         const week = parseInt(weekNumStr, 10);
@@ -315,7 +330,7 @@
           });
 
           setData(rows);
-          showToast("구글 시트 실시간 연동에 성공했습니다.", "success");
+          showToast("구글 시트 연동에 성공했습니다.", "success");
         } catch (err) {
           console.warn('데이터 연동 중 오류 발생:', err.message);
           setError(err.message);
@@ -336,7 +351,7 @@
           { 소속: '2지점', 사번: '2023004', 이름: '최도전', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '20', AP: '8', P: '4', C: '1', N: '0', 소개: '0', 활동계: '33', 보험료: '500,000', 저장일시: '', 마감일시: '' },
         ];
         setData(mock);
-        showToast("가상 시뮬레이션 데이터를 로드했습니다.", "info");
+        showToast("예시 시뮬레이션 데이터를 불러왔습니다.", "info");
       };
 
       useEffect(() => {
@@ -361,6 +376,7 @@
         return ['전체', ...depts.sort()];
       }, [data]);
 
+      // --- 퀵 액션 버튼 핸들러 ---
       const handleQuickAction = (tab, weekOffset) => {
         const targetYear = String(currentTimeInfo.year);
         const targetWeek = String(currentTimeInfo.week + weekOffset);
@@ -370,81 +386,22 @@
         showToast(`${getWeekLabel(targetWeek, targetYear)} ${tab} 정보를 조회합니다.`);
       };
 
-      // 팝업창 전용 동적 기간 통계 계산
-      const modalStats = useMemo(() => {
-        if (!modalUser) return null;
-        
-        const sabun = modalUser.sabun;
-        const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
-
-        const pastResultData = data.filter(d => {
-          if (d['예정결과'] !== '결과') return false;
-          const y = parseInt(d['연도'], 10);
-          const w = parseInt(d['주차'], 10);
-          return (y < currentTimeInfo.year) || (y === currentTimeInfo.year && w < currentTimeInfo.week);
-        });
-
-        const distinctWeeks = [...new Set(pastResultData.map(d => `${d['연도']}-${String(d['주차']).padStart(2, '0')}`))].sort();
-        
-        const currentTarget = `${selectedYear}-${String(selectedWeek).padStart(2, '0')}`;
-        let targetIdx = distinctWeeks.indexOf(currentTarget);
-        
-        if (targetIdx === -1) {
-          targetIdx = distinctWeeks.filter(w => w <= currentTarget).length - 1;
-        }
-
-        const targetWeeks = targetIdx >= 0 
-          ? distinctWeeks.slice(Math.max(0, targetIdx - modalPeriod + 1), targetIdx + 1)
-          : [];
-
-        const expected = { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 };
-        const actual = { TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, 보험료: 0 };
-        const activeWeeks = new Set();
-        const weeksWithN = new Set();
-
-        data.forEach(row => {
-          if (row['사번'] !== sabun) return;
-          const weekStr = `${row['연도']}-${String(row['주차']).padStart(2, '0')}`;
-          
-          if (!targetWeeks.includes(weekStr)) return;
-
-          const isExpected = row['예정결과'] === '예정';
-          const isActual = row['예정결과'] === '결과';
-
-          ['TA', 'AP', 'P', 'C', 'N', '소개', '활동계', '보험료'].forEach(key => {
-            const val = parseNum(row[key]);
-            if (isExpected) expected[key] += val;
-            if (isActual) {
-              actual[key] += val;
-              if (key === 'N' && val > 0) weeksWithN.add(weekStr);
-            }
-          });
-
-          if (isActual) activeWeeks.add(weekStr);
-        });
-
-        return { expected, actual, activeWeeks, weeksWithN };
-      }, [data, modalUser, modalPeriod, selectedYear, selectedWeek, currentTimeInfo]);
-
+      // 월간 실적 계산을 위한 3달간 추이 가공 로직
       const monthlyPerformanceStats = useMemo(() => {
         if (selectedTab !== '월간 실적') return null;
 
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
 
-        // 선택한 연도/주차가 위치한 월을 산출
         const anchorMonth = getWeekYearMonth(selectedYear, selectedWeek);
         const monthsList = getThreeMonthsList(anchorMonth); 
 
-        // 결과값 행만 추출
         const resultRows = data.filter(d => d['예정결과'] === '결과');
 
-        // 월별 요약 초기화
         const monthlyTotals = {};
         monthsList.forEach(m => {
           monthlyTotals[m] = { premium: 0, contracts: 0, ta: 0, ap: 0, activePartners: new Set() };
         });
 
-        // 파트너별 당월 성과 취합용 오브젝트
         const partnerMonthlyAgg = {}; 
         monthsList.forEach(m => {
           partnerMonthlyAgg[m] = {};
@@ -530,6 +487,7 @@
         });
       }, [data, selectedTab, selectedYear, selectedWeek, selectedDept]);
 
+      // --- 성과 우수자 및 필터/사번 정렬 로직 고도화 ---
       const processedData = useMemo(() => {
         if (selectedTab === '진단 리포트' || selectedTab === '월간 실적' || filteredData.length === 0) return [];
 
@@ -538,7 +496,7 @@
         let topPremiumRow = null;
         let topNRow = null;
 
-        // 1. 보험료 1등 추출
+        // 1. 보험료 1등 계산
         filteredData.forEach(row => {
           if (!topPremiumRow) {
             topPremiumRow = row;
@@ -565,7 +523,7 @@
           }
         });
 
-        // 2. 나머지 인원에서 건수(N) 1등 추출
+        // 2. 나머지 중 건수(N) 1등 계산
         const remainingForN = topPremiumRow 
           ? filteredData.filter(row => row !== topPremiumRow) 
           : [...filteredData];
@@ -620,7 +578,7 @@
           const restWithBadges = rest.map(row => ({ ...row, badgePremium: false, badgeN: false }));
           return [...result, ...restWithBadges];
         } else {
-          // 사번순 정렬일 때는 1등 로직은 돌려두되, 렌더링 시 보이지 않게 처리
+          // 사번순일 때는 모든 줄을 사번으로 정렬하며 배지와 하이라이트는 뷰에서 제거
           const allRowsWithBadges = filteredData.map(row => {
             const isPremium = topPremiumRow && row['사번'] === topPremiumRow['사번'] && row['연도'] === topPremiumRow['연도'] && row['주차'] === topPremiumRow['주차'];
             const isN = topNRow && row['사번'] === topNRow['사번'] && row['연도'] === topNRow['연도'] && row['주차'] === topNRow['주차'];
@@ -723,7 +681,7 @@
         return groups;
       }, [data, selectedTab, selectedYear, selectedWeek, selectedDept, diagnosticPeriod]);
 
-      // 퀵 버튼 활성화 하이라이트 여부 감지
+      // 퀵 버튼 상태
       const isLastWeekResult = selectedTab === '결과' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week - 1);
       const isThisWeekExpected = selectedTab === '예정' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week);
       const isThisWeekResult = selectedTab === '결과' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week);
@@ -731,7 +689,7 @@
 
       const generateAIBriefing = async () => {
         if (processedData.length === 0) {
-          showToast("요약할 데이터가 존재하지 않습니다.");
+          showToast("분석할 실적 데이터가 존재하지 않습니다.");
           return;
         }
 
@@ -781,10 +739,10 @@
           
           pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
           pdf.save(`파트너스본부_요약리포트_${selectedYear}_${selectedWeek}주차.pdf`);
-          showToast("PDF 리포트가 성공적으로 다운로드되었습니다.", "success");
+          showToast("PDF 리포트 다운로드를 완료했습니다.", "success");
         } catch (error) {
           console.error('PDF 생성 실패:', error);
-          showToast("PDF 생성 중 에러가 발생했습니다.", "error");
+          showToast("PDF 생성 중 장애가 발생했습니다.", "error");
         }
       };
 
@@ -841,7 +799,7 @@
           try {
             document.execCommand('copy');
             setCopied(true);
-            showToast("메시지가 클립보드에 복사되었습니다.", "success");
+            showToast("코칭 메시지를 클립보드에 복사했습니다.", "success");
           } catch (err) {
             console.error(err);
           }
@@ -850,6 +808,7 @@
         }
       };
 
+      // --- 통계 분석 상세 모달 구성 ---
       const renderModal = () => {
         if (!modalUser || !modalStats) return null;
 
@@ -1150,7 +1109,7 @@
                 </div>
               )}
 
-              {/* 필터 및 탭 뷰 렌더링... */}
+              {/* 필터 및 탭 컨트롤 영역 */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5">
                 
                 {/* 좌측: 탭 메뉴 및 퀵 액션 버튼 */}
@@ -1266,7 +1225,7 @@
                     </div>
                   </div>
 
-                  {/* 정렬 버튼 영역 (예정 및 결과 탭에서만 활성화) */}
+                  {/* 정렬 버튼 영역 */}
                   {(selectedTab === '예정' || selectedTab === '결과') && (
                     <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
                       <button 
@@ -1330,7 +1289,6 @@
                           </tr>
                         ) : (
                           processedData.map((row, idx) => {
-                            // '사번순'일 때는 하이라이트 및 배지를 감추는 디바이드 로직
                             const showHighlighter = sortBy === '실적순' && (row.badgePremium || row.badgeN);
                             const rowBgClass = showHighlighter ? 'bg-orange-50/80 hover:bg-orange-100/80' : 'hover:bg-orange-50/50';
 
@@ -1346,7 +1304,6 @@
                                       {row['이름']}
                                     </button>
                                     
-                                    {/* '실적순' 정렬 상태일 때만 탑 에이스 훈장(배지) 노출 */}
                                     {sortBy === '실적순' && (
                                       <div className="flex gap-1">
                                         {row.badgePremium && (
@@ -1388,11 +1345,9 @@
                 </div>
               )}
 
-              {/* 월간 실적 탭 뷰 렌더링... */}
+              {/* 월간 실적 탭 */}
               {selectedTab === '월간 실적' && monthlyPerformanceStats && (
                 <div className="space-y-6 animate-in fade-in duration-500">
-                  
-                  {/* 월간 실적 헤더 설명글 */}
                   <div className="bg-orange-50 p-5 border border-orange-100 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                     <div className="flex items-center gap-3">
                       <BarChart2 size={24} className="text-orange-500" />
@@ -1410,9 +1365,7 @@
                     </span>
                   </div>
 
-                  {/* 3달 성과 추이 꺾은선 차트 보드 */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* 보험료 추이 차트 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                       <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
@@ -1430,7 +1383,6 @@
                       </div>
                     </div>
 
-                    {/* 계약 건수 추이 차트 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                       <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
@@ -1449,9 +1401,7 @@
                     </div>
                   </div>
 
-                  {/* 당월 누적 KPI 요약 보드 */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* 누적 보험료 카드 */}
                     <div className="bg-gradient-to-br from-orange-500 to-orange-400 p-5 rounded-2xl text-white shadow-md relative overflow-hidden">
                       <p className="text-xs font-semibold opacity-85">당월 누적 보험료</p>
                       <h4 className="text-2xl font-extrabold mt-2">
@@ -1462,7 +1412,6 @@
                       </div>
                     </div>
 
-                    {/* 누적 계약건수 카드 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
                       <p className="text-xs font-semibold text-gray-400">당월 누적 청약 건수</p>
                       <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
@@ -1473,7 +1422,6 @@
                       </div>
                     </div>
 
-                    {/* 활동 인원 카드 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
                       <p className="text-xs font-semibold text-gray-400">당월 실제 가동 인원</p>
                       <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
@@ -1484,7 +1432,6 @@
                       </div>
                     </div>
 
-                    {/* 평균 활동량 카드 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
                       <p className="text-xs font-semibold text-gray-400">가동인원당 평균 활동계</p>
                       <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
@@ -1498,7 +1445,6 @@
                     </div>
                   </div>
 
-                  {/* 월간 합산 성과 현황 표 */}
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-5 border-b border-gray-50 flex items-center justify-between">
                       <h3 className="font-bold text-gray-800 text-base">당월 성과 랭킹 (개인별 누적 합계)</h3>
@@ -1545,14 +1491,12 @@
                       </table>
                     </div>
                   </div>
-
                 </div>
               )}
 
               {/* 2. 지능형 진단 리포트 */}
               {selectedTab === '진단 리포트' && diagnosticData && (
                 <div className="animate-in fade-in duration-500 space-y-6">
-                  
                   <div className="bg-orange-50 p-5 border border-orange-100 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                      <div className="flex items-center gap-3">
                        <ActivityIcon size={24} className="text-orange-500" />
@@ -1579,7 +1523,6 @@
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                    
                     {/* 활동량 체크 */}
                     <div className="bg-white rounded-xl shadow-sm border border-red-200 p-5 flex flex-col h-full relative overflow-hidden group hover:border-red-300 transition-colors">
                       <div className="absolute top-0 left-0 w-full h-1 bg-red-400"></div>
@@ -1727,13 +1670,12 @@
                         )}
                       </div>
                     </div>
-
                   </div>
                 </div>
               )}
             </div>
 
-            {/* 팝업 모달 구조 렌더링 호출 복구 */}
+            {/* 팝업 모달 구조 렌더링 호출 */}
             {renderModal()}
             {renderCoachingModal()}
 
