@@ -76,6 +76,25 @@
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
     );
 
+    function getCurrentWeekAndYear() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const jan1 = new Date(year, 0, 1);
+      
+      let day = jan1.getDay();
+      let diffToMonday = day === 0 ? -6 : 1 - day; 
+      
+      const firstWeekStart = new Date(year, 0, 1 + diffToMonday);
+      firstWeekStart.setHours(0, 0, 0, 0);
+      
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diff = today - firstWeekStart;
+      const week = Math.floor(diff / (1000 * 60 * 60 * 24 * 7)) + 1;
+      
+      return { year, week };
+    }
+
+    // 주차 기준 연월 판정 헬퍼 함수 (월간 실적 탭 분석용)
     function getWeekYearMonth(yearNum, weekNum) {
       const yr = parseInt(yearNum, 10);
       const wk = parseInt(weekNum, 10);
@@ -92,6 +111,7 @@
       return `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
     }
 
+    // 3개월 연월 리스트 생성 헬퍼
     function getThreeMonthsList(anchorMonth) {
       if (!anchorMonth) return [];
       const [yStr, mStr] = anchorMonth.split('-');
@@ -319,6 +339,28 @@
         showToast("가상 시뮬레이션 데이터를 로드했습니다.", "info");
       };
 
+      useEffect(() => {
+        fetchData();
+      }, []);
+
+      const availableYears = useMemo(() => {
+        const years = [...new Set(data.map(item => item['연도']).filter(Boolean))];
+        if (!years.includes(String(currentTimeInfo.year))) years.push(String(currentTimeInfo.year));
+        return years.sort((a, b) => b - a);
+      }, [data, currentTimeInfo.year]);
+
+      const availableWeeks = useMemo(() => {
+        const weeks = [...new Set(data.map(item => item['주차']).filter(Boolean))];
+        if (!weeks.includes(String(currentTimeInfo.week))) weeks.push(String(currentTimeInfo.week));
+        if (!weeks.includes(String(currentTimeInfo.week + 1))) weeks.push(String(currentTimeInfo.week + 1));
+        return weeks.sort((a, b) => Number(a) - Number(b));
+      }, [data, currentTimeInfo.week]);
+
+      const availableDepts = useMemo(() => {
+        const depts = [...new Set(data.map(item => item['소속']).filter(Boolean))];
+        return ['전체', ...depts.sort()];
+      }, [data]);
+
       const handleQuickAction = (tab, weekOffset) => {
         const targetYear = String(currentTimeInfo.year);
         const targetWeek = String(currentTimeInfo.week + weekOffset);
@@ -389,16 +431,20 @@
 
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
 
+        // 선택한 연도/주차가 위치한 월을 산출
         const anchorMonth = getWeekYearMonth(selectedYear, selectedWeek);
         const monthsList = getThreeMonthsList(anchorMonth); 
 
+        // 결과값 행만 추출
         const resultRows = data.filter(d => d['예정결과'] === '결과');
 
+        // 월별 요약 초기화
         const monthlyTotals = {};
         monthsList.forEach(m => {
           monthlyTotals[m] = { premium: 0, contracts: 0, ta: 0, ap: 0, activePartners: new Set() };
         });
 
+        // 파트너별 당월 성과 취합용 오브젝트
         const partnerMonthlyAgg = {}; 
         monthsList.forEach(m => {
           partnerMonthlyAgg[m] = {};
@@ -492,6 +538,7 @@
         let topPremiumRow = null;
         let topNRow = null;
 
+        // 1. 보험료 1등 추출
         filteredData.forEach(row => {
           if (!topPremiumRow) {
             topPremiumRow = row;
@@ -518,6 +565,7 @@
           }
         });
 
+        // 2. 나머지 인원에서 건수(N) 1등 추출
         const remainingForN = topPremiumRow 
           ? filteredData.filter(row => row !== topPremiumRow) 
           : [...filteredData];
@@ -680,6 +728,127 @@
       const isThisWeekExpected = selectedTab === '예정' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week);
       const isThisWeekResult = selectedTab === '결과' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week);
       const isNextWeekExpected = selectedTab === '예정' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week + 1);
+
+      const generateAIBriefing = async () => {
+        if (processedData.length === 0) {
+          showToast("요약할 데이터가 존재하지 않습니다.");
+          return;
+        }
+
+        setIsBriefingGenerating(true);
+        const apiKey = ""; 
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        const totalReps = processedData.length;
+        const topPremium = processedData.find(p => p.badgePremium)?.이름 || '없음';
+        const topN = processedData.find(p => p.badgeN)?.이름 || '없음';
+
+        const systemInstruction = "당신은 파트너스본부의 전략 분석가입니다. 지점장 회의에서 대표가 직접 읊을 '주간 스마트 브리핑' 원고를 개조식(Bullet points) 형태로 3~4줄로 명확하게 뽑아냅니다. 격려와 전략 제언을 포함하십시오.";
+        const userPrompt = `보고 기준: ${selectedYear}년 ${selectedWeek}주차, 조회 인원: 총 ${totalReps}명, 주요 우수자: 보험료 1위(${topPremium}), 건수 1위(${topN}). 이 내용에 알맞게 주간 조회 스피치 텍스트를 만들어줘.`;
+
+        try {
+          const result = await fetchWithRetry(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: userPrompt }] }],
+              systemInstruction: { parts: [{ text: systemInstruction }] }
+            })
+          });
+          const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) setAiBriefing(text);
+        } catch (err) {
+          console.error(err);
+          showToast("AI 브리핑 생성 오류가 발생했습니다.", "error");
+        } finally {
+          setIsBriefingGenerating(false);
+        }
+      };
+
+      const handleDownloadReport = async () => {
+        const element = document.getElementById('report-capture-area');
+        if (!element) return;
+
+        try {
+          const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#FFF9F5' });
+          const imgData = canvas.toDataURL('image/png');
+          
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF('l', 'mm', 'a4'); 
+          
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+          
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+          pdf.save(`파트너스본부_요약리포트_${selectedYear}_${selectedWeek}주차.pdf`);
+          showToast("PDF 리포트가 성공적으로 다운로드되었습니다.", "success");
+        } catch (error) {
+          console.error('PDF 생성 실패:', error);
+          showToast("PDF 생성 중 에러가 발생했습니다.", "error");
+        }
+      };
+
+      const openCoachingModal = (member, type, metricText) => {
+        setCoachingModal({ member, type, metricText, message: "" });
+        setCustomContext("");
+        setApiError("");
+        setCopied(false);
+      };
+
+      const generateWithGemini = async () => {
+        if (!coachingModal) return;
+        
+        setIsGenerating(true);
+        setApiError("");
+        const apiKey = ""; 
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        const { member, type, metricText } = coachingModal;
+
+        const systemInstruction = "당신은 파트너스본부의 리더입니다. 소속 파트너에게 전할 1:1 카톡 코칭 격려 메시지를 정중하고 감동 깊은 어조로 명언을 포함해 3~4단락 작성하십시오.";
+        const userPrompt = `수신: ${member.이름} 파트너, 영역: ${type} (${metricText}), 실적데이터: TA ${member.TA} AP ${member.AP} N ${member.N} 활동계 ${member.활동계}, 리더 추가 지시: ${customContext || '데이터 위주 격려'}`;
+
+        try {
+          const result = await fetchWithRetry(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: userPrompt }] }],
+              systemInstruction: { parts: [{ text: systemInstruction }] }
+            })
+          });
+          
+          const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            setCoachingModal(prev => ({ ...prev, message: text }));
+          } else {
+            throw new Error("파싱 에러");
+          }
+        } catch (err) {
+          setApiError("AI API 연동 장애가 발생했습니다. 잠시 후 시도해 주십시오.");
+        } finally {
+          setIsGenerating(false);
+        }
+      };
+
+      const handleCopyMessage = () => {
+        if (coachingModal && coachingModal.message) {
+          const textArea = document.createElement("textarea");
+          textArea.value = coachingModal.message;
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          try {
+            document.execCommand('copy');
+            setCopied(true);
+            showToast("메시지가 클립보드에 복사되었습니다.", "success");
+          } catch (err) {
+            console.error(err);
+          }
+          document.body.removeChild(textArea);
+          setTimeout(() => setCopied(false), 2000);
+        }
+      };
 
       const renderModal = () => {
         if (!modalUser || !modalStats) return null;
@@ -981,7 +1150,7 @@
                 </div>
               )}
 
-              {}
+              {/* 필터 및 탭 뷰 렌더링... */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5">
                 
                 {/* 좌측: 탭 메뉴 및 퀵 액션 버튼 */}
@@ -1099,7 +1268,7 @@
 
                   {/* 정렬 버튼 영역 (예정 및 결과 탭에서만 활성화) */}
                   {(selectedTab === '예정' || selectedTab === '결과') && (
-                    <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg shadow-inner">
+                    <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
                       <button 
                         onClick={() => setSortBy('사번순')}
                         className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
@@ -1125,7 +1294,7 @@
                 </div>
               </div>
 
-              {}
+              {/* 1. 예정/결과 테이블 */}
               {(selectedTab === '예정' || selectedTab === '결과') && (
                 <div className="bg-white rounded-2xl shadow-sm border border-orange-100 overflow-hidden animate-in fade-in duration-500">
                   <div className="overflow-x-auto">
@@ -1219,7 +1388,7 @@
                 </div>
               )}
 
-              {}
+              {/* 월간 실적 탭 뷰 렌더링... */}
               {selectedTab === '월간 실적' && monthlyPerformanceStats && (
                 <div className="space-y-6 animate-in fade-in duration-500">
                   
@@ -1380,7 +1549,7 @@
                 </div>
               )}
 
-              {}
+              {/* 2. 지능형 진단 리포트 */}
               {selectedTab === '진단 리포트' && diagnosticData && (
                 <div className="animate-in fade-in duration-500 space-y-6">
                   
@@ -1564,11 +1733,11 @@
               )}
             </div>
 
-            {/* 팝업 및 토스트 알림 호출 */}
+            {/* 팝업 모달 구조 렌더링 호출 복구 */}
             {renderModal()}
             {renderCoachingModal()}
 
-            {/* 커스텀 토스트 알림 컴포넌트 */}
+            {/* 커스텀 토스트 알림창 */}
             {toast && (
               <div className="fixed bottom-5 right-5 z-[100] flex items-center gap-2 bg-slate-900 text-white text-sm px-4 py-3 rounded-xl shadow-xl animate-bounce">
                 <Sparkles size={16} className="text-orange-400" />
