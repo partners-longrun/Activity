@@ -11,16 +11,21 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+  </style>
 </head>
-<body class="bg-[#FFF9F5]">
+<body class="bg-[#FFF9F5] antialiased">
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
-    // --- 아이콘 컴포넌트 ---
     const RefreshCw = ({ size = 24, className = "" }) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
     );
     const AlertCircle = ({ size = 24, className = "" }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -59,7 +64,7 @@
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 6 9 17 4 12"/></svg>
     );
     const Sparkles = ({ size = 24, className = "" }) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
     );
     const Loader2 = ({ size = 24, className = "" }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
@@ -71,42 +76,112 @@
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
     );
 
-    function parseCSV(text) {
-      let p = '', row = [''], ret = [row], i = 0, r = 0, s = !0, l;
-      for (l of text) {
-        if ('"' === l) {
-          if (s && l === p) row[i] += l;
-          s = !s;
-        } else if (',' === l && s) l = row[++i] = '';
-        else if ('\n' === l && s) {
-          if ('\r' === p) row[i] = row[i].slice(0, -1);
-          row = ret[++r] = [l = '']; i = 0;
-        } else row[i] += l;
-        p = l;
-      }
-      if (ret.length > 0 && ret[ret.length - 1].length === 1 && ret[ret.length - 1][0] === '') {
-        ret.pop();
-      }
-      return ret;
+    function getWeekYearMonth(yearNum, weekNum) {
+      const yr = parseInt(yearNum, 10);
+      const wk = parseInt(weekNum, 10);
+      if (isNaN(yr) || isNaN(wk)) return null;
+      
+      const jan1 = new Date(yr, 0, 1);
+      let day = jan1.getDay();
+      let diffToMonday = day === 0 ? -6 : 1 - day;
+      const firstMon = new Date(yr, 0, 1 + diffToMonday);
+      
+      const targetDate = new Date(firstMon);
+      // 주차의 중간 요일(목요일)을 기준으로 연월을 판정하여 월간 실적 왜곡 방지
+      targetDate.setDate(targetDate.getDate() + (wk - 1) * 7 + 3); 
+      return `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
     }
 
-    function getCurrentWeekAndYear() {
-      const now = new Date();
-      const year = now.getFullYear();
-      const jan1 = new Date(year, 0, 1);
-      
-      let day = jan1.getDay();
-      let diffToMonday = day === 0 ? -6 : 1 - day; 
-      
-      const firstWeekStart = new Date(year, 0, 1 + diffToMonday);
-      firstWeekStart.setHours(0, 0, 0, 0);
-      
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const diff = today - firstWeekStart;
-      const week = Math.floor(diff / (1000 * 60 * 60 * 24 * 7)) + 1;
-      
-      return { year, week };
+    function getThreeMonthsList(anchorMonth) {
+      if (!anchorMonth) return [];
+      const [yStr, mStr] = anchorMonth.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10) - 1; 
+      const list = [];
+      for (let i = 2; i >= 0; i--) {
+        const d = new Date(y, m - i, 1);
+        list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      return list;
     }
+
+    function formatMonthLabel(mStr) {
+      if (!mStr) return '';
+      const [y, m] = mStr.split('-');
+      return `${parseInt(m, 10)}월`;
+    }
+
+    const SvgTrendChart = ({ labels, values, suffix, colorClass = "orange" }) => {
+      const maxVal = Math.max(...values, 1);
+      const minVal = 0; 
+      const height = 150;
+      const width = 450;
+      const padding = { left: 50, right: 40, top: 25, bottom: 25 };
+      
+      const points = values.map((val, idx) => {
+        const x = padding.left + (idx * (width - padding.left - padding.right) / 2);
+        const y = height - padding.bottom - ((val - minVal) / (maxVal - minVal) * (height - padding.top - padding.bottom));
+        return { x, y, val };
+      });
+
+      const pathD = points.reduce((acc, p, idx) => {
+        return acc + (idx === 0 ? `M ${p.x} ${p.y}` : ` L ${p.x} ${p.y}`);
+      }, "");
+
+      const areaD = pathD + ` L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`;
+
+      const colorTheme = colorClass === "orange" 
+        ? { stroke: "#f97316", fill: "url(#orangeGrad)", dot: "#ea580c" }
+        : { stroke: "#3b82f6", fill: "url(#blueGrad)", dot: "#2563eb" };
+
+      const formatVal = (v) => {
+        if (suffix === "원") {
+          if (v >= 100000000) return `${(v / 100000000).toFixed(1)}억`;
+          if (v >= 10000) return `${Math.round(v / 10000).toLocaleString()}만`;
+          return `${v.toLocaleString()}`;
+        }
+        return `${v.toLocaleString()}${suffix}`;
+      };
+
+      return (
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
+          <defs>
+            <linearGradient id="orangeGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ffedd5" stopOpacity="0.85"/>
+              <stop offset="100%" stopColor="#fff" stopOpacity="0.1"/>
+            </linearGradient>
+            <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#dbeafe" stopOpacity="0.85"/>
+              <stop offset="100%" stopColor="#fff" stopOpacity="0.1"/>
+            </linearGradient>
+          </defs>
+          
+          {/* 가로 보조선 그리기 */}
+          <line x1={padding.left} y1={padding.top} x2={width - padding.right} y2={padding.top} stroke="#f1f5f9" strokeWidth="1" />
+          <line x1={padding.left} y1={(padding.top + height - padding.bottom)/2} x2={width - padding.right} y2={(padding.top + height - padding.bottom)/2} stroke="#f1f5f9" strokeWidth="1" />
+          <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} stroke="#e2e8f0" strokeWidth="1.5" />
+
+          {/* 그라데이션 영역 채우기 */}
+          <path d={areaD} fill={colorTheme.fill} />
+          
+          {/* 메인 꺾은선 그리기 */}
+          <path d={pathD} fill="none" stroke={colorTheme.stroke} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+          
+          {/* 노드 및 데이터 라벨 렌더링 */}
+          {points.map((p, idx) => (
+            <g key={idx}>
+              <circle cx={p.x} cy={p.y} r="5.5" fill={colorTheme.dot} stroke="#fff" strokeWidth="2.5" className="drop-shadow-sm" />
+              <text x={p.x} y={p.y - 12} textAnchor="middle" className="text-[11px] font-bold fill-gray-800">
+                {formatVal(p.val)}
+              </text>
+              <text x={p.x} y={height - 6} textAnchor="middle" className="text-[12px] font-bold fill-gray-500">
+                {labels[idx]}
+              </text>
+            </g>
+          ))}
+        </svg>
+      );
+    };
 
     function App() {
       const SHEET_ID = '1G1rHHaf7ct5zkpsTDzGvOJGuUI9FXbG7fK1C8U1TmpE';
@@ -125,7 +200,11 @@
       const [selectedYear, setSelectedYear] = useState(String(currentTimeInfo.year));
       const [selectedWeek, setSelectedWeek] = useState(String(currentTimeInfo.week));
       const [selectedDept, setSelectedDept] = useState('전체');
-      
+      const [sortBy, setSortBy] = useState('사번순'); // 디폴트: 사번순
+
+      // 커스텀 토스트 알림 상태
+      const [toast, setToast] = useState(null);
+
       // 진단 리포트용 기간 상태
       const [diagnosticPeriod, setDiagnosticPeriod] = useState(50);
 
@@ -144,9 +223,13 @@
       const [apiError, setApiError] = useState("");
       const [copied, setCopied] = useState(false);
 
-      // 오늘 날짜 및 주차별 라벨 계산
       const today = new Date();
       const formattedToday = today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+
+      const showToast = (message, type = "info") => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3500);
+      };
 
       const getWeekLabel = (weekNumStr, yearNumStr) => {
         const week = parseInt(weekNumStr, 10);
@@ -212,6 +295,7 @@
           });
 
           setData(rows);
+          showToast("구글 시트 실시간 연동에 성공했습니다.", "success");
         } catch (err) {
           console.warn('데이터 연동 중 오류 발생:', err.message);
           setError(err.message);
@@ -232,41 +316,19 @@
           { 소속: '2지점', 사번: '2023004', 이름: '최도전', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '20', AP: '8', P: '4', C: '1', N: '0', 소개: '0', 활동계: '33', 보험료: '500,000', 저장일시: '', 마감일시: '' },
         ];
         setData(mock);
+        showToast("가상 시뮬레이션 데이터를 로드했습니다.", "info");
       };
 
-      useEffect(() => {
-        fetchData();
-      }, []);
-
-      const availableYears = useMemo(() => {
-        const years = [...new Set(data.map(item => item['연도']).filter(Boolean))];
-        if (!years.includes(String(currentTimeInfo.year))) years.push(String(currentTimeInfo.year));
-        return years.sort((a, b) => b - a);
-      }, [data, currentTimeInfo.year]);
-
-      const availableWeeks = useMemo(() => {
-        const weeks = [...new Set(data.map(item => item['주차']).filter(Boolean))];
-        if (!weeks.includes(String(currentTimeInfo.week))) weeks.push(String(currentTimeInfo.week));
-        // 빠른 이동 탭(다음주)을 위해 다음주도 강제로 추가 확보
-        if (!weeks.includes(String(currentTimeInfo.week + 1))) weeks.push(String(currentTimeInfo.week + 1));
-        return weeks.sort((a, b) => Number(a) - Number(b));
-      }, [data, currentTimeInfo.week]);
-
-      const availableDepts = useMemo(() => {
-        const depts = [...new Set(data.map(item => item['소속']).filter(Boolean))];
-        return ['전체', ...depts.sort()];
-      }, [data]);
-
-      // --- 퀵 액션 버튼 핸들러 ---
       const handleQuickAction = (tab, weekOffset) => {
         const targetYear = String(currentTimeInfo.year);
         const targetWeek = String(currentTimeInfo.week + weekOffset);
         setSelectedTab(tab);
         setSelectedYear(targetYear);
         setSelectedWeek(targetWeek);
+        showToast(`${getWeekLabel(targetWeek, targetYear)} ${tab} 정보를 조회합니다.`);
       };
 
-      // 팝업창 전용 동적 기간(직전 N주) 통계 계산 로직
+      // 팝업창 전용 동적 기간 통계 계산
       const modalStats = useMemo(() => {
         if (!modalUser) return null;
         
@@ -322,184 +384,94 @@
         return { expected, actual, activeWeeks, weeksWithN };
       }, [data, modalUser, modalPeriod, selectedYear, selectedWeek, currentTimeInfo]);
 
-      const handleOpenModal = (sabun, name) => {
-        setModalUser({ sabun, name });
-      };
+      const monthlyPerformanceStats = useMemo(() => {
+        if (selectedTab !== '월간 실적') return null;
 
-      // 금액 천 단위 콤마 포맷팅 헬퍼 함수
-      const formatCurrency = (val) => {
-        if (!val && val !== 0) return '0';
-        const num = Number(String(val).replace(/[^0-9.-]+/g, ""));
-        return isNaN(num) ? '0' : num.toLocaleString();
-      };
+        const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
 
-      // --- 공통 fetch retry 함수 ---
-      const fetchWithRetry = async (url, options, maxRetries = 5) => {
-        let retries = 0;
-        while (retries < maxRetries) {
-          try {
-            const res = await fetch(url, options);
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-            return await res.json();
-          } catch (err) {
-            retries++;
-            if (retries >= maxRetries) throw err;
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries - 1) * 1000));
+        const anchorMonth = getWeekYearMonth(selectedYear, selectedWeek);
+        const monthsList = getThreeMonthsList(anchorMonth); 
+
+        const resultRows = data.filter(d => d['예정결과'] === '결과');
+
+        const monthlyTotals = {};
+        monthsList.forEach(m => {
+          monthlyTotals[m] = { premium: 0, contracts: 0, ta: 0, ap: 0, activePartners: new Set() };
+        });
+
+        const partnerMonthlyAgg = {}; 
+        monthsList.forEach(m => {
+          partnerMonthlyAgg[m] = {};
+        });
+
+        resultRows.forEach(row => {
+          const rowMonth = getWeekYearMonth(row['연도'], row['주차']);
+          if (!monthsList.includes(rowMonth)) return;
+
+          if (selectedDept !== '전체' && row['소속'] !== selectedDept) return;
+
+          const premium = parseNum(row['보험료']);
+          const contracts = parseNum(row['N']);
+          const ta = parseNum(row['TA']);
+          const ap = parseNum(row['AP']);
+          const sabun = row['사번'];
+          const name = row['이름'];
+          const dept = row['소속'];
+
+          monthlyTotals[rowMonth].premium += premium;
+          monthlyTotals[rowMonth].contracts += contracts;
+          monthlyTotals[rowMonth].ta += ta;
+          monthlyTotals[rowMonth].ap += ap;
+          if (sabun) monthlyTotals[rowMonth].activePartners.add(sabun);
+
+          if (sabun) {
+            if (!partnerMonthlyAgg[rowMonth][sabun]) {
+              partnerMonthlyAgg[rowMonth][sabun] = {
+                사번: sabun,
+                이름: name,
+                소속: dept,
+                TA: 0,
+                AP: 0,
+                P: 0,
+                C: 0,
+                N: 0,
+                소개: 0,
+                활동계: 0,
+                보험료: 0,
+                weeksCount: 0
+              };
+            }
+            const pAgg = partnerMonthlyAgg[rowMonth][sabun];
+            pAgg.TA += ta;
+            pAgg.AP += ap;
+            pAgg.P += parseNum(row['P']);
+            pAgg.C += parseNum(row['C']);
+            pAgg.N += contracts;
+            pAgg.소개 += parseNum(row['소개']);
+            pAgg.활동계 += parseNum(row['활동계']);
+            pAgg.보험료 += premium;
+            pAgg.weeksCount += 1;
           }
-        }
-      };
+        });
 
-      // --- 오프라인 회의용 AI 브리핑 생성 로직 ---
-      const generateAIBriefing = async () => {
-        if (processedData.length === 0) {
-          alert("요약할 데이터가 없습니다.");
-          return;
-        }
+        const trendLabels = monthsList.map(m => formatMonthLabel(m));
+        const premiumTrend = monthsList.map(m => monthlyTotals[m].premium);
+        const contractTrend = monthsList.map(m => monthlyTotals[m].contracts);
 
-        setIsBriefingGenerating(true);
-        const apiKey = ""; 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        const currentMonthTotals = monthlyTotals[anchorMonth] || { premium: 0, contracts: 0, ta: 0, ap: 0, activePartners: new Set() };
+        const currentMonthActiveCount = currentMonthTotals.activePartners.size;
+        const anchorPartnersList = Object.values(partnerMonthlyAgg[anchorMonth] || {}).sort((a, b) => b.보험료 - a.보험료);
 
-        const totalReps = processedData.length;
-        const topPremium = processedData.find(p => p.badgePremium)?.이름 || '없음';
-        const topN = processedData.find(p => p.badgeN)?.이름 || '없음'; // 활동계에서 건수로 변경 반영
-
-        const systemInstruction = "당신은 파트너스본부의 날카로운 전략 분석가입니다. 다가오는 오프라인 지점장 회의에서 대표님이 화면을 띄워놓고 직접 읽으실 '주간 스마트 브리핑' 원고를 작성해 주세요. 핵심만 간결하게 3~4문장의 개조식(Bullet points) 형태로 작성하며, 리더십과 현장 실무에 입각한 전문적인 어조를 유지하세요.";
-        
-        const userPrompt = `
-        보고 기준: ${selectedYear}년 ${selectedWeek}주차
-        조회 인원: 총 ${totalReps}명
-        주요 우수자: 보험료 1위(${topPremium}), 건수 1위(${topN})
-        
-        이 데이터를 바탕으로 회의 오프닝 브리핑을 작성해 주세요. 우수자에 대한 격려와 함께, 다음 주 영업의 방향성(예: 거절 극복, 활동량 증대, 기존 고객 터치 등)을 리더의 시각에서 한 가지 힘주어 제안해 주세요.
-        `;
-
-        const payload = {
-          contents: [{ parts: [{ text: userPrompt }] }],
-          systemInstruction: { parts: [{ text: systemInstruction }] }
+        return {
+          trendLabels,
+          premiumTrend,
+          contractTrend,
+          anchorMonth,
+          currentMonthTotals,
+          currentMonthActiveCount,
+          anchorPartnersList
         };
-
-        try {
-          const result = await fetchWithRetry(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) setAiBriefing(text);
-        } catch (err) {
-          console.error(err);
-          alert("AI 브리핑 생성 중 오류가 발생했습니다.");
-        } finally {
-          setIsBriefingGenerating(false);
-        }
-      };
-
-      // --- PDF 리포트 다운로드 로직 ---
-      const handleDownloadReport = async () => {
-        const element = document.getElementById('report-capture-area');
-        if (!element) return;
-
-        try {
-          const canvas = await html2canvas(element, { 
-            scale: 2, 
-            useCORS: true,
-            backgroundColor: '#FFF9F5' 
-          });
-          const imgData = canvas.toDataURL('image/png');
-          
-          const { jsPDF } = window.jspdf;
-          const pdf = new jsPDF('l', 'mm', 'a4'); 
-          
-          const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-          
-          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-          pdf.save(`파트너스본부_요약리포트_${selectedYear}_${selectedWeek}주차.pdf`);
-        } catch (error) {
-          console.error('PDF 생성 실패:', error);
-          alert('리포트 다운로드 중 오류가 발생했습니다.');
-        }
-      };
-
-      // --- Gemini API 통신 로직 (개별 코칭 메시지) ---
-      const openCoachingModal = (member, type, metricText) => {
-        setCoachingModal({ member, type, metricText, message: "" });
-        setCustomContext("");
-        setApiError("");
-        setCopied(false);
-      };
-
-      const generateWithGemini = async () => {
-        if (!coachingModal) return;
-        
-        setIsGenerating(true);
-        setApiError("");
-        const apiKey = ""; 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-        const { member, type, metricText } = coachingModal;
-
-        const systemInstruction = "당신은 파트너스본부의 탁월하고 지혜로운 영업 리더(대표)입니다. 소속 영업 사원(파트너)에게 보낼 1:1 카카오톡 코칭 메시지를 작성합니다. 실적 압박이나 딱딱한 지시보다는, 깊은 통찰과 인간적인 위로를 주어 마음을 움직여야 합니다. 반드시 유명한 책 구절이나 영화 대사, 혹은 철학적인 명언을 1개 인용하여 메시지의 논리를 전개하세요. 어조는 정중하고 진정성 있게, 존댓말을 사용하세요.";
-        
-        const userPrompt = `
-        수신자: ${member.이름} 파트너
-        현재 문제 진단: ${type} (${metricText})
-        해당 기간 누적 데이터: TA(전화) ${member.TA}건, AP(미팅) ${member.AP}건, P(제안) ${member.P}건, C(클로징) ${member.C}건, N(계약) ${member.N}건, 소개 ${member.소개}명, 총 활동계 ${member.활동계}건.
-        리더의 추가 코멘트/지시사항 (선택사항): ${customContext || '특별한 추가 지시사항 없음. 데이터 위주로 격려해 주세요.'}
-
-        위 정보를 바탕으로 '[파트너스본부 주간 코칭 메시지]'라는 제목으로 시작하는 3~4단락의 격려 및 행동 지침 메시지를 작성해주세요.
-        마지막엔 늘 곁에서 응원한다는 따뜻한 인사말로 마무리해주세요.
-        `;
-
-        const payload = {
-          contents: [{ parts: [{ text: userPrompt }] }],
-          systemInstruction: { parts: [{ text: systemInstruction }] }
-        };
-
-        try {
-          const result = await fetchWithRetry(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          
-          const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            setCoachingModal(prev => ({ ...prev, message: text }));
-          } else {
-            throw new Error("응답을 파싱할 수 없습니다.");
-          }
-        } catch (err) {
-          setApiError("AI 메시지 생성 중 네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
-          console.error(err);
-        } finally {
-          setIsGenerating(false);
-        }
-      };
-
-      const handleCopyMessage = () => {
-        if (coachingModal && coachingModal.message) {
-          navigator.clipboard.writeText(coachingModal.message)
-            .then(() => setCopied(true))
-            .catch(err => console.error('Failed to copy text: ', err));
-          
-          const textArea = document.createElement("textarea");
-          textArea.value = coachingModal.message;
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          try {
-            document.execCommand('copy');
-            setCopied(true);
-          } catch (err) {
-            console.error('Fallback: Oops, unable to copy', err);
-          }
-          document.body.removeChild(textArea);
-          
-          setTimeout(() => setCopied(false), 2000);
-        }
-      };
+      }, [data, selectedTab, selectedYear, selectedWeek, selectedDept]);
 
       const filteredData = useMemo(() => {
         return data.filter(item => {
@@ -512,7 +484,6 @@
         });
       }, [data, selectedTab, selectedYear, selectedWeek, selectedDept]);
 
-      // --- 개선된 메인 데이터 정렬 및 1등 추출 로직 ---
       const processedData = useMemo(() => {
         if (selectedTab === '진단 리포트' || selectedTab === '월간 실적' || filteredData.length === 0) return [];
 
@@ -521,7 +492,6 @@
         let topPremiumRow = null;
         let topNRow = null;
 
-        // 1. 보험료 1등 추출 (동점 시 건수(N) -> 활동계 순)
         filteredData.forEach(row => {
           if (!topPremiumRow) {
             topPremiumRow = row;
@@ -548,7 +518,6 @@
           }
         });
 
-        // 2. 나머지 인원에서 건수(N) 1등 추출 (동점 시 보험료 -> 활동계 순)
         const remainingForN = topPremiumRow 
           ? filteredData.filter(row => row !== topPremiumRow) 
           : [...filteredData];
@@ -579,32 +548,50 @@
           }
         });
 
-        // 3. 나머지 인원 정렬 (보험료 -> 건수(N) -> 활동계 순 내림차순)
-        const rest = remainingForN.filter(row => row !== topNRow);
-        rest.sort((a, b) => {
-          const pA = parseNum(a['보험료']), pB = parseNum(b['보험료']);
-          if (pA !== pB) return pB - pA;
+        if (sortBy === '실적순') {
+          const rest = remainingForN.filter(row => row !== topNRow);
+          rest.sort((a, b) => {
+            const pA = parseNum(a['보험료']), pB = parseNum(b['보험료']);
+            if (pA !== pB) return pB - pA;
+            
+            const nA = parseNum(a['N']), nB = parseNum(b['N']);
+            if (nA !== nB) return nB - nA;
+            
+            const aA = parseNum(a['활동계']), aB = parseNum(b['활동계']);
+            if (aA !== aB) return aB - aA;
+
+            const sabunA = String(a['사번'] || '');
+            const sabunB = String(b['사번'] || '');
+            return sabunA.localeCompare(sabunB, undefined, { numeric: true });
+          });
+
+          const result = [];
+          if (topPremiumRow) result.push({ ...topPremiumRow, badgePremium: true, badgeN: false });
+          if (topNRow) result.push({ ...topNRow, badgePremium: false, badgeN: true });
           
-          const nA = parseNum(a['N']), nB = parseNum(b['N']);
-          if (nA !== nB) return nB - nA;
-          
-          const aA = parseNum(a['활동계']), aB = parseNum(b['활동계']);
-          if (aA !== aB) return aB - aA;
+          const restWithBadges = rest.map(row => ({ ...row, badgePremium: false, badgeN: false }));
+          return [...result, ...restWithBadges];
+        } else {
+          // 사번순 정렬일 때는 1등 로직은 돌려두되, 렌더링 시 보이지 않게 처리
+          const allRowsWithBadges = filteredData.map(row => {
+            const isPremium = topPremiumRow && row['사번'] === topPremiumRow['사번'] && row['연도'] === topPremiumRow['연도'] && row['주차'] === topPremiumRow['주차'];
+            const isN = topNRow && row['사번'] === topNRow['사번'] && row['연도'] === topNRow['연도'] && row['주차'] === topNRow['주차'];
+            return {
+              ...row,
+              badgePremium: !!isPremium,
+              badgeN: !!isN
+            };
+          });
 
-          const sabunA = String(a['사번'] || '');
-          const sabunB = String(b['사번'] || '');
-          return sabunA.localeCompare(sabunB, undefined, { numeric: true });
-        });
+          allRowsWithBadges.sort((a, b) => {
+            const sabunA = String(a['사번'] || '');
+            const sabunB = String(b['사번'] || '');
+            return sabunA.localeCompare(sabunB, undefined, { numeric: true });
+          });
 
-        const result = [];
-        // 배지 이름 badgeActivity -> badgeN 으로 변경 반영
-        if (topPremiumRow) result.push({ ...topPremiumRow, badgePremium: true, badgeN: false });
-        if (topNRow) result.push({ ...topNRow, badgePremium: false, badgeN: true });
-        
-        const restWithBadges = rest.map(row => ({ ...row, badgePremium: false, badgeN: false }));
-
-        return [...result, ...restWithBadges];
-      }, [filteredData, selectedTab]);
+          return allRowsWithBadges;
+        }
+      }, [filteredData, selectedTab, sortBy]);
 
       const diagnosticData = useMemo(() => {
         if (selectedTab !== '진단 리포트') return null;
@@ -688,18 +675,16 @@
         return groups;
       }, [data, selectedTab, selectedYear, selectedWeek, selectedDept, diagnosticPeriod]);
 
-      // 퀵 액션 버튼의 활성화 상태 판단 로직
+      // 퀵 버튼 활성화 하이라이트 여부 감지
       const isLastWeekResult = selectedTab === '결과' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week - 1);
       const isThisWeekExpected = selectedTab === '예정' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week);
       const isThisWeekResult = selectedTab === '결과' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week);
       const isNextWeekExpected = selectedTab === '예정' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week + 1);
 
-      // --- 통계 팝업 렌더링 ---
       const renderModal = () => {
         if (!modalUser || !modalStats) return null;
 
         const { expected, actual, activeWeeks, weeksWithN } = modalStats;
-
         const formatNum = (num) => num ? num.toLocaleString() : '0';
 
         const calcRatio = (act, exp) => exp === 0 ? (act > 0 ? '100%' : '-') : Math.round((act / exp) * 100) + '%';
@@ -730,7 +715,6 @@
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setModalUser(null)}>
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden" onClick={e => e.stopPropagation()}>
-              
               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-6 bg-orange-500 rounded-full"></div>
@@ -742,7 +726,6 @@
               </div>
 
               <div className="p-6 bg-gray-50/50 space-y-6">
-                
                 <div className="flex items-center gap-3">
                   <select 
                     value={modalPeriod} 
@@ -844,21 +827,18 @@
                     </tbody>
                   </table>
                 </div>
-
               </div>
             </div>
           </div>
         );
       };
 
-      // --- AI 코칭 어시스턴트 팝업창 ---
       const renderCoachingModal = () => {
         if (!coachingModal) return null;
 
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200" onClick={() => setCoachingModal(null)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-orange-100" onClick={e => e.stopPropagation()}>
-              
               <div className="bg-gradient-to-r from-orange-500 to-orange-400 p-5 flex justify-between items-center text-white">
                 <div className="flex items-center gap-2.5">
                   <Sparkles size={22} className="text-orange-50" />
@@ -1001,7 +981,7 @@
                 </div>
               )}
 
-              {/* 필터 및 탭 컨트롤 영역 UI 개선 적용 */}
+              {}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5">
                 
                 {/* 좌측: 탭 메뉴 및 퀵 액션 버튼 */}
@@ -1068,56 +1048,84 @@
                   </div>
                 </div>
 
-                {/* 우측: 콤보박스 필터 영역 */}
-                <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto xl:justify-end">
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
-                      <Calendar size={14} /> 연도
-                    </label>
-                    <select 
-                      value={selectedYear} 
-                      onChange={(e) => setSelectedYear(e.target.value)}
-                      className="w-24 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
-                    >
-                      {availableYears.map(year => (
-                        <option key={year} value={year}>{year}년</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
-                      <Calendar size={14} /> 주차
-                    </label>
-                    <select 
-                      value={selectedWeek} 
-                      onChange={(e) => setSelectedWeek(e.target.value)}
-                      className="w-36 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
-                    >
-                      {availableWeeks.map(week => (
-                        <option key={week} value={week}>{getWeekLabel(week, selectedYear)}</option>
-                      ))}
-                    </select>
+                {/* 우측: 콤보박스 필터 영역 및 정렬 방식 컨트롤 */}
+                <div className="flex flex-col items-end gap-3 w-full xl:w-auto">
+                  <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto xl:justify-end">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
+                        <Calendar size={14} /> 연도
+                      </label>
+                      <select 
+                        value={selectedYear} 
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        className="w-24 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
+                      >
+                        {availableYears.map(year => (
+                          <option key={year} value={year}>{year}년</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
+                        <Calendar size={14} /> 주차
+                      </label>
+                      <select 
+                        value={selectedWeek} 
+                        onChange={(e) => setSelectedWeek(e.target.value)}
+                        className="w-36 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
+                      >
+                        {availableWeeks.map(week => (
+                          <option key={week} value={week}>{getWeekLabel(week, selectedYear)}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
+                        <Users size={14} /> 소속
+                      </label>
+                      <select 
+                        value={selectedDept} 
+                        onChange={(e) => setSelectedDept(e.target.value)}
+                        className="w-28 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
+                      >
+                        {availableDepts.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
-                      <Users size={14} /> 소속
-                    </label>
-                    <select 
-                      value={selectedDept} 
-                      onChange={(e) => setSelectedDept(e.target.value)}
-                      className="w-28 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
-                    >
-                      {availableDepts.map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* 정렬 버튼 영역 (예정 및 결과 탭에서만 활성화) */}
+                  {(selectedTab === '예정' || selectedTab === '결과') && (
+                    <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg shadow-inner">
+                      <button 
+                        onClick={() => setSortBy('사번순')}
+                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                          sortBy === '사번순' 
+                            ? 'bg-white text-orange-600 shadow-sm' 
+                            : 'text-gray-500 hover:text-orange-500'
+                        }`}
+                      >
+                        사번순
+                      </button>
+                      <button 
+                        onClick={() => setSortBy('실적순')}
+                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                          sortBy === '실적순' 
+                            ? 'bg-white text-orange-600 shadow-sm' 
+                            : 'text-gray-500 hover:text-orange-500'
+                        }`}
+                      >
+                        실적순
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* 1. 예정/결과 테이블 */}
+              {}
               {(selectedTab === '예정' || selectedTab === '결과') && (
                 <div className="bg-white rounded-2xl shadow-sm border border-orange-100 overflow-hidden animate-in fade-in duration-500">
                   <div className="overflow-x-auto">
@@ -1152,41 +1160,51 @@
                             </td>
                           </tr>
                         ) : (
-                          processedData.map((row, idx) => (
-                            <tr key={idx} className={`transition-colors ${row.badgePremium || row.badgeN ? 'bg-orange-50/80 hover:bg-orange-100/80' : 'hover:bg-orange-50/50'}`}>
-                              <td className="py-3 px-4 font-medium text-gray-600 text-base">{row['소속']}</td>
-                              <td className="py-3 px-4 font-semibold text-gray-800 text-base">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button 
-                                    onClick={() => handleOpenModal(row['사번'], row['이름'])}
-                                    className="hover:text-orange-600 hover:underline underline-offset-4 cursor-pointer focus:outline-none transition-colors"
-                                  >
-                                    {row['이름']}
-                                  </button>
-                                  <div className="flex gap-1">
-                                    {row.badgePremium && (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200" title="보험료 1등">
-                                        👑 보험료
-                                      </span>
-                                    )}
-                                    {row.badgeN && (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200" title="건수 1등">
-                                        🔥 건수
-                                      </span>
+                          processedData.map((row, idx) => {
+                            // '사번순'일 때는 하이라이트 및 배지를 감추는 디바이드 로직
+                            const showHighlighter = sortBy === '실적순' && (row.badgePremium || row.badgeN);
+                            const rowBgClass = showHighlighter ? 'bg-orange-50/80 hover:bg-orange-100/80' : 'hover:bg-orange-50/50';
+
+                            return (
+                              <tr key={idx} className={`transition-colors ${rowBgClass}`}>
+                                <td className="py-3 px-4 font-medium text-gray-600 text-base">{row['소속']}</td>
+                                <td className="py-3 px-4 font-semibold text-gray-800 text-base">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button 
+                                      onClick={() => handleOpenModal(row['사번'], row['이름'])}
+                                      className="hover:text-orange-600 hover:underline underline-offset-4 cursor-pointer focus:outline-none transition-colors"
+                                    >
+                                      {row['이름']}
+                                    </button>
+                                    
+                                    {/* '실적순' 정렬 상태일 때만 탑 에이스 훈장(배지) 노출 */}
+                                    {sortBy === '실적순' && (
+                                      <div className="flex gap-1">
+                                        {row.badgePremium && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200" title="보험료 1등">
+                                            👑 보험료
+                                          </span>
+                                        )}
+                                        {row.badgeN && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200" title="건수 1등">
+                                            🔥 건수
+                                          </span>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
-                                </div>
-                              </td>
-                              <td className="py-3 px-2 text-gray-600 text-base">{row['TA']}</td>
-                              <td className="py-3 px-2 text-gray-600 text-base">{row['AP']}</td>
-                              <td className="py-3 px-2 text-gray-600 text-base">{row['P']}</td>
-                              <td className="py-3 px-2 text-gray-600 text-base">{row['C']}</td>
-                              <td className={`py-3 px-2 text-base ${Number(row['N']) >= 3 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{row['N']}</td>
-                              <td className="py-3 px-2 text-gray-600 text-base">{row['소개']}</td>
-                              <td className="py-3 px-3 font-bold text-orange-600 bg-orange-50/30 text-base">{row['활동계']}</td>
-                              <td className="py-3 px-4 font-medium text-gray-700 text-right pr-6 text-base">{formatCurrency(row['보험료'])}</td>
-                            </tr>
-                          ))
+                                </td>
+                                <td className="py-3 px-2 text-gray-600 text-base">{row['TA']}</td>
+                                <td className="py-3 px-2 text-gray-600 text-base">{row['AP']}</td>
+                                <td className="py-3 px-2 text-gray-600 text-base">{row['P']}</td>
+                                <td className="py-3 px-2 text-gray-600 text-base">{row['C']}</td>
+                                <td className={`py-3 px-2 text-base ${Number(row['N']) >= 3 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{row['N']}</td>
+                                <td className="py-3 px-2 text-gray-600 text-base">{row['소개']}</td>
+                                <td className="py-3 px-3 font-bold text-orange-600 bg-orange-50/30 text-base">{row['활동계']}</td>
+                                <td className="py-3 px-4 font-medium text-gray-700 text-right pr-6 text-base">{formatCurrency(row['보험료'])}</td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
@@ -1201,20 +1219,168 @@
                 </div>
               )}
 
-              {/* 월간 실적 탭 (준비 중) */}
-              {selectedTab === '월간 실적' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-orange-100 p-16 text-center animate-in fade-in duration-500">
-                  <div className="inline-flex justify-center items-center w-16 h-16 rounded-full bg-orange-50 text-orange-400 mb-4">
-                    <BarChart2 size={32} />
+              {}
+              {selectedTab === '월간 실적' && monthlyPerformanceStats && (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                  
+                  {/* 월간 실적 헤더 설명글 */}
+                  <div className="bg-orange-50 p-5 border border-orange-100 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <BarChart2 size={24} className="text-orange-500" />
+                      <div>
+                        <h2 className="text-lg font-bold text-gray-800">
+                          {formatMonthLabel(monthlyPerformanceStats.anchorMonth)} 성과 통계 및 추이
+                        </h2>
+                        <p className="text-sm text-gray-600 mt-1">
+                          선택한 주차({selectedWeek}주차)를 기준으로 최근 3개월의 트렌드를 추적하고 해당 월의 누적 실적을 정밀 분석합니다.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs bg-white border border-orange-200 px-3 py-1.5 rounded-full text-orange-700 font-bold shadow-sm">
+                      당월 기준: {monthlyPerformanceStats.anchorMonth}
+                    </span>
                   </div>
-                  <h2 className="text-xl font-bold text-gray-800 mb-2">월간 실적 리포트 준비 중</h2>
-                  <p className="text-gray-500 text-sm">
-                    파트너스본부의 거시적인 성과 트렌드를 한눈에 확인할 수 있는 월간 데이터 대시보드가 이곳에 구축될 예정입니다.
-                  </p>
+
+                  {/* 3달 성과 추이 꺾은선 차트 보드 */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* 보험료 추이 차트 */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                          <span className="w-1 h-4 bg-orange-500 rounded-full"></span> 3개월 누적 보험료 추이
+                        </h3>
+                        <span className="text-xs text-gray-400">(결과 합산 기준)</span>
+                      </div>
+                      <div className="p-2">
+                        <SvgTrendChart 
+                          labels={monthlyPerformanceStats.trendLabels} 
+                          values={monthlyPerformanceStats.premiumTrend} 
+                          suffix="원" 
+                          colorClass="orange" 
+                        />
+                      </div>
+                    </div>
+
+                    {/* 계약 건수 추이 차트 */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                          <span className="w-1 h-4 bg-blue-500 rounded-full"></span> 3개월 계약 건수(N) 추이
+                        </h3>
+                        <span className="text-xs text-gray-400">(결과 합산 기준)</span>
+                      </div>
+                      <div className="p-2">
+                        <SvgTrendChart 
+                          labels={monthlyPerformanceStats.trendLabels} 
+                          values={monthlyPerformanceStats.contractTrend} 
+                          suffix="건" 
+                          colorClass="blue" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 당월 누적 KPI 요약 보드 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {/* 누적 보험료 카드 */}
+                    <div className="bg-gradient-to-br from-orange-500 to-orange-400 p-5 rounded-2xl text-white shadow-md relative overflow-hidden">
+                      <p className="text-xs font-semibold opacity-85">당월 누적 보험료</p>
+                      <h4 className="text-2xl font-extrabold mt-2">
+                        {formatCurrency(monthlyPerformanceStats.currentMonthTotals.premium)}원
+                      </h4>
+                      <div className="absolute right-3 bottom-3 opacity-15">
+                        <Target size={56} />
+                      </div>
+                    </div>
+
+                    {/* 누적 계약건수 카드 */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+                      <p className="text-xs font-semibold text-gray-400">당월 누적 청약 건수</p>
+                      <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
+                        {monthlyPerformanceStats.currentMonthTotals.contracts}건
+                      </h4>
+                      <div className="absolute right-3 bottom-3 text-orange-100 opacity-50">
+                        <BarChart2 size={56} />
+                      </div>
+                    </div>
+
+                    {/* 활동 인원 카드 */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+                      <p className="text-xs font-semibold text-gray-400">당월 실제 가동 인원</p>
+                      <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
+                        {monthlyPerformanceStats.currentMonthActiveCount}명
+                      </h4>
+                      <div className="absolute right-3 bottom-3 text-orange-100 opacity-50">
+                        <Users size={56} />
+                      </div>
+                    </div>
+
+                    {/* 평균 활동량 카드 */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+                      <p className="text-xs font-semibold text-gray-400">가동인원당 평균 활동계</p>
+                      <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
+                        {monthlyPerformanceStats.currentMonthActiveCount > 0 
+                          ? Math.round(monthlyPerformanceStats.currentMonthTotals.ap / monthlyPerformanceStats.currentMonthActiveCount) 
+                          : 0}건
+                      </h4>
+                      <div className="absolute right-3 bottom-3 text-orange-100 opacity-50">
+                        <ActivityIcon size={56} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 월간 합산 성과 현황 표 */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-5 border-b border-gray-50 flex items-center justify-between">
+                      <h3 className="font-bold text-gray-800 text-base">당월 성과 랭킹 (개인별 누적 합계)</h3>
+                      <span className="text-xs text-gray-500">보험료 실적 기준 정렬</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-center border-collapse min-w-[700px]">
+                        <thead className="bg-[#f8fafc] text-gray-600 border-b border-gray-100">
+                          <tr>
+                            <th className="py-3 px-4 font-semibold">소속</th>
+                            <th className="py-3 px-4 font-semibold">이름</th>
+                            <th className="py-3 px-2 font-semibold">누적 TA</th>
+                            <th className="py-3 px-2 font-semibold">누적 AP</th>
+                            <th className="py-3 px-2 font-semibold">누적 N (건수)</th>
+                            <th className="py-3 px-2 font-semibold">누적 소개</th>
+                            <th className="py-3 px-2 font-semibold">활동 주차 수</th>
+                            <th className="py-3 px-4 font-semibold text-right pr-8">합산 보험료</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {monthlyPerformanceStats.anchorPartnersList.length === 0 ? (
+                            <tr>
+                              <td colSpan="8" className="py-10 text-center text-gray-400">당월 실적 데이터가 존재하지 않습니다.</td>
+                            </tr>
+                          ) : (
+                            monthlyPerformanceStats.anchorPartnersList.map((p, idx) => (
+                              <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                                <td className="py-3 px-4 text-gray-600">{p.소속}</td>
+                                <td className="py-3 px-4 font-bold text-gray-800">
+                                  <button onClick={() => handleOpenModal(p.사번, p.이름)} className="hover:text-orange-500 hover:underline">
+                                    {p.이름}
+                                  </button>
+                                </td>
+                                <td className="py-3 px-2 text-gray-600">{p.TA}건</td>
+                                <td className="py-3 px-2 text-gray-600">{p.AP}건</td>
+                                <td className="py-3 px-2 font-semibold text-gray-800">{p.N}건</td>
+                                <td className="py-3 px-2 text-gray-600">{p.소개}명</td>
+                                <td className="py-3 px-2 text-gray-500">{p.weeksCount}주 활동</td>
+                                <td className="py-3 px-4 font-bold text-gray-900 text-right pr-8">{formatCurrency(p.보험료)}원</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
                 </div>
               )}
 
-              {/* 2. 지능형 진단 리포트 */}
+              {}
               {selectedTab === '진단 리포트' && diagnosticData && (
                 <div className="animate-in fade-in duration-500 space-y-6">
                   
@@ -1398,9 +1564,17 @@
               )}
             </div>
 
-            {/* 누락되었던 팝업 렌더링 호출 복구 */}
+            {/* 팝업 및 토스트 알림 호출 */}
             {renderModal()}
             {renderCoachingModal()}
+
+            {/* 커스텀 토스트 알림 컴포넌트 */}
+            {toast && (
+              <div className="fixed bottom-5 right-5 z-[100] flex items-center gap-2 bg-slate-900 text-white text-sm px-4 py-3 rounded-xl shadow-xl animate-bounce">
+                <Sparkles size={16} className="text-orange-400" />
+                <span>{toast.message}</span>
+              </div>
+            )}
 
           </div>
         </div>
