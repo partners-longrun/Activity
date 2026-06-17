@@ -8,7 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- 안정적인 빌드를 위해 Babel standalone 버전을 7.15.8로 고정하여 ESM import 버그 해결 -->
+  <script src="https://unpkg.com/@babel/standalone@7.15.8/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -143,7 +144,7 @@
       return `${parseInt(m, 10)}월`;
     }
 
-    // 금액 및 숫자 천 단위 콤마 포맷팅 글로벌 함수 (오류 해결 핵심)
+    // 금액 및 숫자 천 단위 콤마 포맷팅 글로벌 함수
     function formatCurrency(val) {
       if (!val && val !== 0) return '0';
       const num = Number(String(val).replace(/[^0-9.-]+/g, ""));
@@ -262,7 +263,7 @@
         setTimeout(() => setToast(null), 3500);
       };
 
-      // 오늘 날짜 및 주차별 라벨 계산 (오류 수정 지점)
+      // 오늘 날짜 및 주차별 라벨 계산
       const today = new Date();
       const formattedToday = today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
 
@@ -791,19 +792,29 @@
 
       const handleCopyMessage = () => {
         if (coachingModal && coachingModal.message) {
-          const textArea = document.createElement("textarea");
-          textArea.value = coachingModal.message;
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          try {
-            document.execCommand('copy');
-            setCopied(true);
-            showToast("코칭 메시지를 클립보드에 복사했습니다.", "success");
-          } catch (err) {
-            console.error(err);
+          const textCopy = coachingModal.message;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(textCopy)
+              .then(() => {
+                setCopied(true);
+                showToast("코칭 메시지를 클립보드에 복사했습니다.", "success");
+              })
+              .catch(err => console.error(err));
+          } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = textCopy;
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+              document.execCommand('copy');
+              setCopied(true);
+              showToast("코칭 메시지를 클립보드에 복사했습니다.", "success");
+            } catch (err) {
+              console.error(err);
+            }
+            document.body.removeChild(textArea);
           }
-          document.body.removeChild(textArea);
           setTimeout(() => setCopied(false), 2000);
         }
       };
@@ -1088,7 +1099,7 @@
                   <AlertCircle className="text-orange-500 shrink-0 mt-0.5" size={20} />
                   <div className="text-sm text-orange-800">
                     <p className="font-semibold mb-1">현재 예시 데이터로 화면을 보여드리고 있습니다.</p>
-                    <p className="opacity-90">실제 데이터를 연동하려면 구글 스프레드시트의 공유 설정을 <strong>'링크가 있는 모든 사용자' (뷰어)</strong>로 변경해주시거나, '파일 > 공유 > 웹에 게시'에서 CSV 형식으로 게시를 완료해 주십시오.</p>
+                    <p className="opacity-90 font-medium">실제 데이터를 연동하려면 구글 스프레드시트의 공유 설정을 <strong>'링크가 있는 모든 사용자' (뷰어)</strong>로 변경해주시거나, '파일 &gt; 공유 &gt; 웹에 게시'에서 CSV 형식으로 게시를 완료해 주십시오.</p>
                   </div>
                 </div>
               )}
