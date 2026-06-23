@@ -125,7 +125,6 @@
       return `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
     }
 
-    // 직전 3개월 리스트 생성
     function getThreeMonthsList(anchorMonth) {
       if (!anchorMonth) return [];
       const [yStr, mStr] = anchorMonth.split('-');
@@ -152,7 +151,7 @@
       return isNaN(num) ? '0' : num.toLocaleString();
     }
 
-    // 지수 백오프 방식의 Retry API 호출 전역 함수 (안정성 극대화)
+    // 지수 백오프 방식의 Retry API 호출 전역 함수
     async function fetchWithRetry(url, options, maxRetries = 5) {
       let retries = 0;
       while (retries < maxRetries) {
@@ -163,7 +162,6 @@
         } catch (err) {
           retries++;
           if (retries >= maxRetries) throw err;
-          // 지수 백오프 대기: 1초, 2s, 4s, 8s, 16s
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries - 1) * 1000));
         }
       }
@@ -265,7 +263,8 @@
 
       // 팝업(모달) 상태 관리
       const [modalUser, setModalUser] = useState(null);
-      const [modalPeriod, setModalPeriod] = useState(50);
+      // [조정 사항] 개별 통계 모달 기본 기간을 '직전 4주'로 설정
+      const [modalPeriod, setModalPeriod] = useState(4);
 
       // AI 격려 메시지 및 스마트 브리핑 생성용 상태
       const [coachingModal, setCoachingModal] = useState(null); 
@@ -371,7 +370,7 @@
           { 소속: '1지점', 사번: '2023001', 이름: '김대표', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '8', AP: '4', P: '2', C: '1', N: '3', 소개: '1', 활동계: '19', 보험료: '1,200,000', 저장일시: '', 마감일시: '' },
           { 소속: '1지점', 사번: '2023002', 이름: '이파트너', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '예정', TA: '15', AP: '8', P: '4', C: '2', N: '0', 소개: '1', 활동계: '30', 보험료: '2,000,000', 저장일시: '', 마감일시: '' },
           { 소속: '1지점', 사번: '2023002', 이름: '이파트너', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '16', AP: '9', P: '5', C: '2', N: '1', 소개: '2', 활동계: '35', 보험료: '2,500,000', 저장일시: '', 마감일시: '' },
-          { 소속: '2지점', 사번: '2023003', 이름: '박신입', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '5', AP: '1', P: '0', C: '0', N: '0', 소개: '0', 활동계: '6', 보험료: '0', 저장일시: '', 마감일시: '' },
+          { 소속: '2지점', 사번: '2023003', font: '박신입', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '5', AP: '1', P: '0', C: '0', N: '0', 소개: '0', 활동계: '6', 보험료: '0', 저장일시: '', 마감일시: '' },
           { 소속: '2지점', 사번: '2023004', 이름: '최도전', 연도: String(currentTimeInfo.year), 주차: String(currentTimeInfo.week), 예정결과: '결과', TA: '20', AP: '8', P: '4', C: '1', N: '0', 소개: '0', 활동계: '33', 보험료: '500,000', 저장일시: '', 마감일시: '' },
         ];
         setData(mock);
