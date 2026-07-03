@@ -237,9 +237,13 @@
 
     // --- 메인 App 컴포넌트 ---
     function App() {
-      const SHEET_ID = '1G1rHHaf7ct5zkpsTDzGvOJGuUI9FXbG7fK1C8U1TmpE';
-      const SHEET_NAME = 'Activity';
-      const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_NAME}`;
+      // ─────────────────────────────────────────────────────
+      //  GAS 백엔드 URL
+      //  GAS Web App 배포 후 아래 값을 실제 URL로 교체하세요.
+      //  배포 설정: 다음 사용자로 실행 = 나 / 액세스 = 모든 사용자
+      // ─────────────────────────────────────────────────────
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbwu-GO5I5hV8Hb7l9Jf0oXEvvZb9OdVjWAlPs--ObubqwznB7uQ3ljiuTZGyaVQ5Q8T/exec';
+      const GAS_CONFIGURED = !GAS_URL.includes('YOUR_SCRIPT_ID');
 
       const currentTimeInfo = getCurrentWeekAndYear();
       
@@ -247,6 +251,14 @@
       const [loading, setLoading] = useState(true);
       const [error, setError] = useState(null);
       const [usingMockData, setUsingMockData] = useState(false);
+
+      // 월실적_DB 데이터 상태
+      const [monthlyDbData, setMonthlyDbData] = useState([]);
+      const [monthlyDbLoading, setMonthlyDbLoading] = useState(false);
+      const [monthlyDbError, setMonthlyDbError] = useState(null);
+
+      // GAS 미설정 안내
+      const [gasNotConfigured, setGasNotConfigured] = useState(!GAS_CONFIGURED);
 
       // 필터 및 화면 설정 상태
       const [selectedTab, setSelectedTab] = useState('결과'); 
@@ -314,46 +326,80 @@
         return `${week}주차 (${month}/${date})`;
       };
 
+      // ─────────────────────────────────────────────────────
+      //  GAS API 공통 호출 헬퍼
+      //  GAS Web App은 302 리다이렉트를 거치므로 redirect:'follow'
+      // ─────────────────────────────────────────────────────
+      const fetchFromGas = async (type) => {
+        const url = `${GAS_URL}?type=${type}`;
+        const res = await fetch(url, { redirect: 'follow' });
+        if (!res.ok) throw new Error(`GAS 응답 오류 (${res.status})`);
+        const json = await res.json();
+        if (json.status === 'error') throw new Error(json.message);
+        return json.data; // 배열 반환
+      };
+
+      // GAS에서 받은 row 객체의 값을 문자열로 정규화
+      // (숫자·날짜 등 JSON 타입 → 기존 코드와 호환되는 문자열)
+      const normalizeGasRow = (row) => {
+        const out = {};
+        Object.keys(row).forEach(k => {
+          const v = row[k];
+          if (v === null || v === undefined) out[k] = '';
+          else if (typeof v === 'number') out[k] = String(v);
+          else out[k] = String(v);
+        });
+        return out;
+      };
+
+      // ─────────────────────────────────────────────────────
+      //  월실적_DB 로드 (GAS ?type=monthlydb)
+      // ─────────────────────────────────────────────────────
+      const fetchMonthlyDb = async () => {
+        if (!GAS_CONFIGURED) {
+          setMonthlyDbError('GAS URL이 설정되지 않았습니다.');
+          return;
+        }
+        setMonthlyDbLoading(true);
+        setMonthlyDbError(null);
+        try {
+          const rawRows = await fetchFromGas('monthlydb');
+          // GAS는 숫자/날짜 타입으로 반환 → 각 필드를 문자열로 정규화
+          const rows = rawRows.map(normalizeGasRow);
+          setMonthlyDbData(rows);
+          showToast('월실적_DB 연동에 성공했습니다.', 'success');
+        } catch (err) {
+          console.warn('월실적_DB 연동 오류:', err.message);
+          setMonthlyDbError(err.message);
+          showToast('월실적_DB 연동 실패: ' + err.message, 'error');
+        } finally {
+          setMonthlyDbLoading(false);
+        }
+      };
+
+      // ─────────────────────────────────────────────────────
+      //  활동_DB 로드 (GAS ?type=activity)
+      // ─────────────────────────────────────────────────────
       const fetchData = async () => {
         setLoading(true);
         setError(null);
         setUsingMockData(false);
-        setAiBriefing(""); 
-        
+        setAiBriefing('');
+
+        if (!GAS_CONFIGURED) {
+          setGasNotConfigured(true);
+          loadMockData();
+          setLoading(false);
+          return;
+        }
+
         try {
-          let text = '';
-          try {
-            const response = await fetch(CSV_URL);
-            if (!response.ok) throw new Error('네트워크 응답이 정상이 아닙니다.');
-            text = await response.text();
-          } catch (directErr) {
-            console.warn('직접 접근 실패, 프록시를 통해 재시도합니다.');
-            const PROXY_URL = `https://api.allorigins.win/raw?url=${encodeURIComponent(CSV_URL)}`;
-            const proxyResponse = await fetch(PROXY_URL);
-            if (!proxyResponse.ok) throw new Error('시트 접근 권한이 없거나 불러올 수 없습니다.');
-            text = await proxyResponse.text();
-          }
-          
-          if (text.trim().startsWith('<!DOCTYPE html>')) {
-            throw new Error('시트 접근 권한이 없습니다. 시트 공유 설정을 확인해주세요.');
-          }
-
-          const parsedData = parseCSV(text);
-          if (parsedData.length < 2) {
-            throw new Error('데이터가 비어있거나 형식이 올바르지 않습니다.');
-          }
-
-          const headers = parsedData[0];
-          const rows = parsedData.slice(1).map(row => {
-            const rowData = {};
-            headers.forEach((header, index) => {
-              rowData[header?.trim()] = row[index]?.trim() || '';
-            });
-            return rowData;
-          });
-
+          const rawRows = await fetchFromGas('activity');
+          if (!rawRows || rawRows.length === 0)
+            throw new Error('데이터가 비어있습니다.');
+          const rows = rawRows.map(normalizeGasRow);
           setData(rows);
-          showToast("구글 시트 연동에 성공했습니다.", "success");
+          showToast('구글 시트 연동에 성공했습니다.', 'success');
         } catch (err) {
           console.warn('데이터 연동 중 오류 발생:', err.message);
           setError(err.message);
@@ -379,6 +425,7 @@
 
       useEffect(() => {
         fetchData();
+        fetchMonthlyDb();
       }, []);
 
       const availableYears = useMemo(() => {
@@ -409,75 +456,129 @@
         showToast(`${getWeekLabel(targetWeek, targetYear)} ${tab} 정보를 조회합니다.`);
       };
 
-      // 월간 실적 계산을 위한 3달간 추이 가공 로직
+      // 월간 실적 계산: 월실적_DB의 '실적분석_신계약전체' 시트 기반
       const monthlyPerformanceStats = useMemo(() => {
         if (selectedTab !== '월간 실적') return null;
 
-        const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
+        const parseNum = (val) => {
+          if (val === null || val === undefined || val === '') return 0;
+          // 숫자 형식 정규화: 천 단위 콤마, 원화 기호 등 제거
+          return Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
+        };
 
+        // 마감월 기준 앵커월 계산 (YYYY-MM 형식)
         const anchorMonth = getWeekYearMonth(selectedYear, selectedWeek);
-        const monthsList = getThreeMonthsList(anchorMonth); 
+        const monthsList = getThreeMonthsList(anchorMonth);
 
-        const resultRows = data.filter(d => d['예정결과'] === '결과');
+        // Activity 시트에서 해당 소속의 사번 목록 추출
+        const memberSabunSet = new Set();
+        const sabunToInfo = {}; // sabun -> { 이름, 소속 }
+        data.forEach(row => {
+          const sabun = String(row['사번'] || '').trim();
+          if (!sabun) return;
+          if (selectedDept !== '전체' && row['소속'] !== selectedDept) return;
+          memberSabunSet.add(sabun);
+          if (!sabunToInfo[sabun]) {
+            sabunToInfo[sabun] = { 이름: row['이름'] || '', 소속: row['소속'] || '' };
+          }
+        });
 
+        // 마감월 컬럼명 자동 탐지 (첫 번째 행에서 '마감월' 포함 컬럼 찾기)
+        const detectColName = (rows, candidates) => {
+          if (rows.length === 0) return null;
+          const keys = Object.keys(rows[0]);
+          for (const cand of candidates) {
+            const found = keys.find(k => k.trim() === cand || k.includes(cand));
+            if (found) return found;
+          }
+          return null;
+        };
+
+        const colMarGamwol  = detectColName(monthlyDbData, ['마감월']);
+        const colMojibJabun = detectColName(monthlyDbData, ['모집자사번']);
+        const colBohumryo   = detectColName(monthlyDbData, ['보험료']);
+        const colGyeyakState = detectColName(monthlyDbData, ['계약상태']);
+
+        // 컬럼이 없으면 빈 결과 반환
+        if (!colMarGamwol || !colMojibJabun || !colBohumryo) {
+          const emptyTotals = { premium: 0, contracts: 0, ta: 0, ap: 0, activePartners: new Set() };
+          return {
+            trendLabels: monthsList.map(m => formatMonthLabel(m)),
+            premiumTrend: [0, 0, 0],
+            contractTrend: [0, 0, 0],
+            anchorMonth,
+            currentMonthTotals: emptyTotals,
+            currentMonthActiveCount: 0,
+            anchorPartnersList: [],
+            monthlyDbNotReady: true,
+          };
+        }
+
+        // 마감월 값을 YYYY-MM 형식으로 정규화하는 함수
+        // 시트 값이 '202506', '2025-06', '2025.06', '2025/06' 등 다양할 수 있음
+        const normalizeMonth = (val) => {
+          if (!val) return '';
+          const s = String(val).trim().replace(/[./:]/g, '-');
+          // YYYYMM -> YYYY-MM
+          if (/^\d{6}$/.test(s)) return `${s.slice(0,4)}-${s.slice(4,6)}`;
+          // YYYY-MM 또는 YYYY-M
+          const m = s.match(/^(\d{4})-(\d{1,2})$/);
+          if (m) return `${m[1]}-${String(m[2]).padStart(2,'0')}`;
+          // Date 객체로 변환 시도 (엑셀 날짜 직렬 번호 등)
+          const d = new Date(val);
+          if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+          return s;
+        };
+
+        // 집계 초기화
         const monthlyTotals = {};
         monthsList.forEach(m => {
           monthlyTotals[m] = { premium: 0, contracts: 0, ta: 0, ap: 0, activePartners: new Set() };
         });
+        const partnerMonthlyAgg = {};
+        monthsList.forEach(m => { partnerMonthlyAgg[m] = {}; });
 
-        const partnerMonthlyAgg = {}; 
-        monthsList.forEach(m => {
-          partnerMonthlyAgg[m] = {};
-        });
-
-        resultRows.forEach(row => {
-          const rowMonth = getWeekYearMonth(row['연도'], row['주차']);
+        // 월실적_DB 필터링 및 집계
+        monthlyDbData.forEach(row => {
+          const rawMonth = row[colMarGamwol];
+          const rowMonth = normalizeMonth(rawMonth);
           if (!monthsList.includes(rowMonth)) return;
 
-          if (selectedDept !== '전체' && row['소속'] !== selectedDept) return;
+          const sabun = String(row[colMojibJabun] || '').trim();
+          if (!sabun) return;
 
-          const premium = parseNum(row['보험료']);
-          const contracts = parseNum(row['N']);
-          const ta = parseNum(row['TA']);
-          const ap = parseNum(row['AP']);
-          const sabun = row['사번'];
-          const name = row['이름'];
-          const dept = row['소속'];
+          // 소속 필터: Activity 시트에 있는 사번만 포함
+          if (selectedDept !== '전체' && !memberSabunSet.has(sabun)) return;
+          if (selectedDept === '전체' && memberSabunSet.size > 0 && !memberSabunSet.has(sabun)) {
+            // 전체 소속이어도 Activity 시트에 없는 사번은 제외
+            // (Activity 시트에 없는 사람은 소속원이 아님)
+            return;
+          }
+
+          // 계약상태 필터 - '정상'인 행만
+          if (colGyeyakState) {
+            const state = String(row[colGyeyakState] || '').trim();
+            if (state !== '정상') return;
+          }
+
+          const premium = parseNum(row[colBohumryo]);
 
           monthlyTotals[rowMonth].premium += premium;
-          monthlyTotals[rowMonth].contracts += contracts;
-          monthlyTotals[rowMonth].ta += ta;
-          monthlyTotals[rowMonth].ap += ap;
-          if (sabun) monthlyTotals[rowMonth].activePartners.add(sabun);
+          monthlyTotals[rowMonth].contracts += 1; // 정상 계약 건수
+          monthlyTotals[rowMonth].activePartners.add(sabun);
 
-          if (sabun) {
-            if (!partnerMonthlyAgg[rowMonth][sabun]) {
-              partnerMonthlyAgg[rowMonth][sabun] = {
-                사번: sabun,
-                이름: name,
-                소속: dept,
-                TA: 0,
-                AP: 0,
-                P: 0,
-                C: 0,
-                N: 0,
-                소개: 0,
-                활동계: 0,
-                보험료: 0,
-                weeksCount: 0
-              };
-            }
-            const pAgg = partnerMonthlyAgg[rowMonth][sabun];
-            pAgg.TA += ta;
-            pAgg.AP += ap;
-            pAgg.P += parseNum(row['P']);
-            pAgg.C += parseNum(row['C']);
-            pAgg.N += contracts;
-            pAgg.소개 += parseNum(row['소개']);
-            pAgg.활동계 += parseNum(row['활동계']);
-            pAgg.보험료 += premium;
-            pAgg.weeksCount += 1;
+          const info = sabunToInfo[sabun] || { 이름: sabun, 소속: '' };
+          if (!partnerMonthlyAgg[rowMonth][sabun]) {
+            partnerMonthlyAgg[rowMonth][sabun] = {
+              사번: sabun,
+              이름: info.이름,
+              소속: info.소속,
+              건수: 0,
+              보험료: 0,
+            };
           }
+          partnerMonthlyAgg[rowMonth][sabun].건수 += 1;
+          partnerMonthlyAgg[rowMonth][sabun].보험료 += premium;
         });
 
         const trendLabels = monthsList.map(m => formatMonthLabel(m));
@@ -488,6 +589,10 @@
         const currentMonthActiveCount = currentMonthTotals.activePartners.size;
         const anchorPartnersList = Object.values(partnerMonthlyAgg[anchorMonth] || {}).sort((a, b) => b.보험료 - a.보험료);
 
+        // 3개월 누적 합계
+        const cumulativePremium = premiumTrend.reduce((acc, v) => acc + v, 0);
+        const cumulativeContracts = contractTrend.reduce((acc, v) => acc + v, 0);
+
         return {
           trendLabels,
           premiumTrend,
@@ -495,9 +600,12 @@
           anchorMonth,
           currentMonthTotals,
           currentMonthActiveCount,
-          anchorPartnersList
+          anchorPartnersList,
+          cumulativePremium,
+          cumulativeContracts,
+          monthlyDbNotReady: false,
         };
-      }, [data, selectedTab, selectedYear, selectedWeek, selectedDept]);
+      }, [data, monthlyDbData, selectedTab, selectedYear, selectedWeek, selectedDept]);
 
       const filteredData = useMemo(() => {
         return data.filter(item => {
@@ -1172,12 +1280,32 @@
                 </div>
               </div>
 
+              {/* GAS URL 미설정 안내 배너 */}
+              {gasNotConfigured && (
+                <div data-html2canvas-ignore className="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                    <AlertCircle size={18} className="text-blue-600" />
+                  </div>
+                  <div className="text-sm text-blue-900 flex-1">
+                    <p className="font-bold text-base mb-2">🔐 GAS 백엔드 URL 설정이 필요합니다</p>
+                    <p className="text-blue-700 mb-3">보안을 위해 구글 시트는 비공개로 유지하고 GAS Web App을 통해 데이터를 제공합니다.</p>
+                    <ol className="list-decimal list-inside space-y-1.5 text-blue-800 font-medium">
+                      <li><a href="https://script.google.com" target="_blank" className="underline text-blue-600">script.google.com</a>에서 GAS 프로젝트를 열고 <code className="bg-blue-100 px-1 rounded">Code.gs</code> 내용을 업데이트하세요.</li>
+                      <li><strong>[배포] → [새 배포]</strong> 클릭 → 유형: 웹 앱 선택</li>
+                      <li><strong>다음 사용자로 실행: 나</strong> / <strong>액세스 권한: 모든 사용자</strong> 설정 후 배포</li>
+                      <li>발급된 웹 앱 URL을 <code className="bg-blue-100 px-1 rounded">index.html</code>의 <code className="bg-blue-100 px-1 rounded">GAS_URL</code> 상수에 붙여넣으세요.</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
+
+              {/* Mock 데이터 사용 중 안내 */}
               {usingMockData && (
                 <div data-html2canvas-ignore className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-r-lg flex items-start gap-3">
                   <AlertCircle className="text-orange-500 shrink-0 mt-0.5" size={20} />
                   <div className="text-sm text-orange-800">
                     <p className="font-semibold mb-1">현재 예시 데이터로 화면을 보여드리고 있습니다.</p>
-                    <p className="opacity-90 font-medium">실제 데이터를 연동하려면 구글 스프레드시트의 공유 설정을 <strong>'링크가 있는 모든 사용자' (뷰어)</strong>로 변경해주시거나, '파일 &gt; 공유 &gt; 웹에 게시'에서 CSV 형식으로 게시를 완료해 주십시오.</p>
+                    <p className="opacity-90 font-medium">실제 데이터를 연동하려면 위 안내에 따라 GAS Web App URL을 설정해주세요.</p>
                   </div>
                 </div>
               )}
@@ -1475,9 +1603,9 @@
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                       <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                          <span className="w-1 h-4 bg-blue-500 rounded-full"></span> 3개월 계약 건수(N) 추이
+                          <span className="w-1 h-4 bg-blue-500 rounded-full"></span> 3개월 신계약 건수 추이
                         </h3>
-                        <span className="text-xs text-gray-400">(결과 합산 기준)</span>
+                        <span className="text-xs text-gray-400">(계약상태 = 정상 기준)</span>
                       </div>
                       <div className="p-2">
                         <SvgTrendChart 
@@ -1490,45 +1618,71 @@
                     </div>
                   </div>
 
+                  {/* DB 미연동 안내 배너 */}
+                  {monthlyPerformanceStats.monthlyDbNotReady && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                      <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                      <div className="text-sm text-amber-800">
+                        <p className="font-bold">월실적_DB 시트 연동 대기 중</p>
+                        <p className="mt-0.5 opacity-80">시트 파일 ID: <code>1ga0GBAWXCWBn5ghbLl1jsXN7yN7K6s8qt-RXsHXep58</code> / 시트명: <code>실적분석_신계약전체</code></p>
+                        <p className="mt-0.5 opacity-80">해당 파일을 <strong>'링크가 있는 모든 사용자'(뷰어)</strong>로 공유 설정하면 건수·보험료 데이터가 표시됩니다.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* DB 로딩 중 안내 */}
+                  {monthlyDbLoading && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 rounded-xl p-3">
+                      <RefreshCw size={16} className="animate-spin text-orange-400" />
+                      월실적_DB 데이터를 불러오는 중입니다...
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {/* 당월 누적 보험료 */}
                     <div className="bg-gradient-to-br from-orange-500 to-orange-400 p-5 rounded-2xl text-white shadow-md relative overflow-hidden">
-                      <p className="text-xs font-semibold opacity-85">당월 누적 보험료</p>
+                      <p className="text-xs font-semibold opacity-85">당월 신계약 보험료</p>
                       <h4 className="text-2xl font-extrabold mt-2">
                         {formatCurrency(monthlyPerformanceStats.currentMonthTotals.premium)}원
                       </h4>
+                      <p className="text-xs opacity-70 mt-1">계약상태 = 정상 기준</p>
                       <div className="absolute right-3 bottom-3 opacity-15">
                         <Target size={56} />
                       </div>
                     </div>
 
+                    {/* 당월 누적 건수 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-                      <p className="text-xs font-semibold text-gray-400">당월 누적 청약 건수</p>
+                      <p className="text-xs font-semibold text-gray-400">당월 신계약 건수</p>
                       <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
                         {monthlyPerformanceStats.currentMonthTotals.contracts}건
                       </h4>
+                      <p className="text-xs text-gray-400 mt-1">정상 계약 행 수</p>
                       <div className="absolute right-3 bottom-3 text-orange-100 opacity-50">
                         <BarChart2 size={56} />
                       </div>
                     </div>
 
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-                      <p className="text-xs font-semibold text-gray-400">당월 실제 가동 인원</p>
-                      <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
-                        {monthlyPerformanceStats.currentMonthActiveCount}명
+                    {/* 3개월 누적 보험료 */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-blue-100 relative overflow-hidden">
+                      <p className="text-xs font-semibold text-blue-500">3개월 누적 보험료</p>
+                      <h4 className="text-xl font-extrabold text-gray-800 mt-2">
+                        {formatCurrency(monthlyPerformanceStats.cumulativePremium)}원
                       </h4>
-                      <div className="absolute right-3 bottom-3 text-orange-100 opacity-50">
-                        <Users size={56} />
+                      <p className="text-xs text-gray-400 mt-1">{monthlyPerformanceStats.trendLabels[0]} ~ {monthlyPerformanceStats.trendLabels[2]}</p>
+                      <div className="absolute right-3 bottom-3 text-blue-100 opacity-50">
+                        <BarChart2 size={56} />
                       </div>
                     </div>
 
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-                      <p className="text-xs font-semibold text-gray-400">가동인원당 평균 활동계</p>
+                    {/* 3개월 누적 건수 */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-blue-100 relative overflow-hidden">
+                      <p className="text-xs font-semibold text-blue-500">3개월 누적 건수</p>
                       <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
-                        {monthlyPerformanceStats.currentMonthActiveCount > 0 
-                          ? Math.round(monthlyPerformanceStats.currentMonthTotals.ap / monthlyPerformanceStats.currentMonthActiveCount) 
-                          : 0}건
+                        {monthlyPerformanceStats.cumulativeContracts}건
                       </h4>
-                      <div className="absolute right-3 bottom-3 text-orange-100 opacity-50">
+                      <p className="text-xs text-gray-400 mt-1">{monthlyPerformanceStats.trendLabels[0]} ~ {monthlyPerformanceStats.trendLabels[2]}</p>
+                      <div className="absolute right-3 bottom-3 text-blue-100 opacity-50">
                         <ActivityIcon size={56} />
                       </div>
                     </div>
@@ -1536,42 +1690,41 @@
 
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-5 border-b border-gray-50 flex items-center justify-between">
-                      <h3 className="font-bold text-gray-800 text-base">당월 성과 랭킹 (개인별 누적 합계)</h3>
-                      <span className="text-xs text-gray-500">보험료 실적 기준 정렬</span>
+                      <h3 className="font-bold text-gray-800 text-base">당월 성과 랭킹 (개인별 신계약 합계)</h3>
+                      <span className="text-xs text-gray-500">보험료 기준 정렬 · 계약상태 = 정상</span>
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm text-center border-collapse min-w-[700px]">
+                      <table className="w-full text-sm text-center border-collapse min-w-[500px]">
                         <thead className="bg-[#f8fafc] text-gray-600 border-b border-gray-100">
                           <tr>
+                            <th className="py-3 px-3 font-semibold">순위</th>
                             <th className="py-3 px-4 font-semibold">소속</th>
                             <th className="py-3 px-4 font-semibold">이름</th>
-                            <th className="py-3 px-2 font-semibold">누적 TA</th>
-                            <th className="py-3 px-2 font-semibold">누적 AP</th>
-                            <th className="py-3 px-2 font-semibold">누적 N (건수)</th>
-                            <th className="py-3 px-2 font-semibold">누적 소개</th>
-                            <th className="py-3 px-2 font-semibold">활동 주차 수</th>
+                            <th className="py-3 px-4 font-semibold">신계약 건수</th>
                             <th className="py-3 px-4 font-semibold text-right pr-8">합산 보험료</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                           {monthlyPerformanceStats.anchorPartnersList.length === 0 ? (
                             <tr>
-                              <td colSpan="8" className="py-10 text-center text-gray-400">당월 실적 데이터가 존재하지 않습니다.</td>
+                              <td colSpan="5" className="py-10 text-center text-gray-400">당월 실적 데이터가 존재하지 않습니다.</td>
                             </tr>
                           ) : (
                             monthlyPerformanceStats.anchorPartnersList.map((p, idx) => (
-                              <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                              <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${idx === 0 ? 'bg-orange-50/40' : ''}`}>
+                                <td className="py-3 px-3">
+                                  {idx === 0 ? <span className="font-bold text-orange-500">🥇</span>
+                                   : idx === 1 ? <span className="font-bold text-gray-500">🥈</span>
+                                   : idx === 2 ? <span className="font-bold text-amber-600">🥉</span>
+                                   : <span className="text-gray-400">{idx + 1}</span>}
+                                </td>
                                 <td className="py-3 px-4 text-gray-600">{p.소속}</td>
                                 <td className="py-3 px-4 font-bold text-gray-800">
                                   <button onClick={() => handleOpenModal(p.사번, p.이름)} className="hover:text-orange-500 hover:underline">
                                     {p.이름}
                                   </button>
                                 </td>
-                                <td className="py-3 px-2 text-gray-600">{p.TA}건</td>
-                                <td className="py-3 px-2 text-gray-600">{p.AP}건</td>
-                                <td className="py-3 px-2 font-semibold text-gray-800">{p.N}건</td>
-                                <td className="py-3 px-2 text-gray-600">{p.소개}명</td>
-                                <td className="py-3 px-2 text-gray-500">{p.weeksCount}주 활동</td>
+                                <td className="py-3 px-4 font-semibold text-gray-800">{p.건수}건</td>
                                 <td className="py-3 px-4 font-bold text-gray-900 text-right pr-8">{formatCurrency(p.보험료)}원</td>
                               </tr>
                             ))
