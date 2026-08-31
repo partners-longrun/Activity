@@ -144,6 +144,28 @@
       return `${parseInt(m, 10)}월`;
     }
 
+    // 마감월 및 퇴사연월 값을 YYYY-MM 형식으로 정규화 (예: 202608 -> 2026-08, 2026.08 -> 2026-08)
+    function normalizeMonth(val) {
+      if (!val) return '';
+      const s = String(val).trim().replace(/[./:]/g, '-');
+      if (/^\d{6}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}`;
+      const m = s.match(/^(\d{4})-(\d{1,2})$/);
+      if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}`;
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return s;
+    }
+
+    // 특정 대상월(YYYY-MM) 기준 재직 여부 판별 (퇴사연월이 없거나 대상월 <= 퇴사연월이면 재직)
+    function isUserActiveInMonth(user, targetMonth) {
+      if (!user) return false;
+      const retireVal = user['퇴사여부'];
+      if (!retireVal) return true;
+      const retireMonth = normalizeMonth(retireVal);
+      if (!retireMonth) return true;
+      return targetMonth <= retireMonth;
+    }
+
     // 금액 및 숫자 천 단위 콤마 포맷팅 글로벌 함수
     function formatCurrency(val) {
       if (!val && val !== 0) return '0';
@@ -455,13 +477,14 @@
           { 사번: '2023003', 이름: '박신입', 소속1: '투게더사업단', 활동관리: 'Y', 퇴사여부: '' },
           { 사번: '2023004', 이름: '최도전', 소속1: '투게더사업단', 활동관리: 'Y', 퇴사여부: '' },
           { 사번: '2023005', 이름: '미입력자', 소속1: '투게더사업단', 활동관리: 'Y', 퇴사여부: '' },
-          { 사번: '2023006', 이름: '퇴사자', 소속1: '투게더사업단', 활동관리: 'Y', 퇴사여부: 'Y' },
-          { 사번: '2023007', 이름: '활동미대상자', 소속1: '투게더사업단', 활동관리: 'N', 퇴사여부: '' }
+          { 사번: '2023006', 이름: '퇴사자', 소속1: '투게더사업단', 활동관리: 'Y', 퇴사여부: '202607' },
+          { 사번: '2023007', 이름: '월간전용자', 소속1: '투게더사업단', 활동관리: 'Month', 퇴사여부: '' },
+          { 사번: '2023008', 이름: '활동미대상자', 소속1: '투게더사업단', 활동관리: 'N', 퇴사여부: '' }
         ];
         setData(mock);
         setUserInfoData(
           mockUser
-            .filter(u => u.활동관리 === 'Y' && u.퇴사여부 !== 'Y')
+            .filter(u => ['Y', 'MONTH'].includes(String(u.활동관리 || '').trim().toUpperCase()))
             .map(u => ({ ...u, 소속: u.소속1 }))
         );
         showToast("예시 시뮬레이션 데이터를 불러왔습니다.", "info");
@@ -508,7 +531,6 @@
 
         const parseNum = (val) => {
           if (val === null || val === undefined || val === '') return 0;
-          // 숫자 형식 정규화: 천 단위 콤마, 원화 기호 등 제거
           return Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         };
 
@@ -516,17 +538,20 @@
         const anchorMonth = getWeekYearMonth(selectedYear, selectedWeek);
         const monthsList = getThreeMonthsList(anchorMonth);
 
-        // 사용자정보에서 해당 소속의 사번 목록 추출
-        const memberSabunSet = new Set();
-        const sabunToInfo = {}; // sabun -> { 이름, 소속 }
+        // 사용자정보에서 대상 사번 매핑 (활동관리 'Y' 및 'Month' 모두 포함)
+        const sabunToInfo = {}; // sabun -> { 이름, 소속, 활동관리, user }
         userInfoData.forEach(row => {
           const sabun = String(row['사번'] || '').trim();
           if (!sabun) return;
-          if (selectedDept !== '전체' && row['소속'] !== selectedDept) return;
-          memberSabunSet.add(sabun);
-          if (!sabunToInfo[sabun]) {
-            sabunToInfo[sabun] = { 이름: row['이름'] || '', 소속: row['소속'] || '' };
-          }
+          const manage = String(row['활동관리'] || '').trim().toUpperCase();
+          if (manage !== 'Y' && manage !== 'MONTH') return;
+
+          sabunToInfo[sabun] = {
+            이름: row['이름'] || '',
+            소속: row['소속'] || '',
+            활동관리: manage,
+            user: row
+          };
         });
 
         // 마감월 컬럼명 자동 탐지 (첫 번째 행에서 '마감월' 포함 컬럼 찾기)
@@ -560,22 +585,6 @@
           };
         }
 
-        // 마감월 값을 YYYY-MM 형식으로 정규화하는 함수
-        // 시트 값이 '202506', '2025-06', '2025.06', '2025/06' 등 다양할 수 있음
-        const normalizeMonth = (val) => {
-          if (!val) return '';
-          const s = String(val).trim().replace(/[./:]/g, '-');
-          // YYYYMM -> YYYY-MM
-          if (/^\d{6}$/.test(s)) return `${s.slice(0,4)}-${s.slice(4,6)}`;
-          // YYYY-MM 또는 YYYY-M
-          const m = s.match(/^(\d{4})-(\d{1,2})$/);
-          if (m) return `${m[1]}-${String(m[2]).padStart(2,'0')}`;
-          // Date 객체로 변환 시도 (엑셀 날짜 직렬 번호 등)
-          const d = new Date(val);
-          if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-          return s;
-        };
-
         // 집계 초기화
         const monthlyTotals = {};
         monthsList.forEach(m => {
@@ -593,13 +602,14 @@
           const sabun = String(row[colMojibJabun] || '').trim();
           if (!sabun) return;
 
-          // 소속 필터: Activity 시트에 있는 사번만 포함
-          if (selectedDept !== '전체' && !memberSabunSet.has(sabun)) return;
-          if (selectedDept === '전체' && memberSabunSet.size > 0 && !memberSabunSet.has(sabun)) {
-            // 전체 소속이어도 Activity 시트에 없는 사번은 제외
-            // (Activity 시트에 없는 사람은 소속원이 아님)
-            return;
-          }
+          const userInfo = sabunToInfo[sabun];
+          if (!userInfo) return; // 사용자정보에 등록되지 않은(또는 활동미대상) 사번 제외
+
+          // 소속 필터
+          if (selectedDept !== '전체' && userInfo.소속 !== selectedDept) return;
+
+          // 퇴사자 필터: 해당 실적 발생월(rowMonth) 당시 재직 중이었는지 확인
+          if (!isUserActiveInMonth(userInfo.user, rowMonth)) return;
 
           // 계약상태 필터 - '정상'인 행만
           if (colGyeyakState) {
@@ -613,12 +623,11 @@
           monthlyTotals[rowMonth].contracts += 1; // 정상 계약 건수
           monthlyTotals[rowMonth].activePartners.add(sabun);
 
-          const info = sabunToInfo[sabun] || { 이름: sabun, 소속: '' };
           if (!partnerMonthlyAgg[rowMonth][sabun]) {
             partnerMonthlyAgg[rowMonth][sabun] = {
               사번: sabun,
-              이름: info.이름,
-              소속: info.소속,
+              이름: userInfo.이름,
+              소속: userInfo.소속,
               건수: 0,
               보험료: 0,
             };
@@ -651,14 +660,18 @@
           cumulativeContracts,
           monthlyDbNotReady: false,
         };
-      }, [data, monthlyDbData, selectedTab, selectedYear, selectedWeek, selectedDept]);
+      }, [monthlyDbData, selectedTab, selectedYear, selectedWeek, selectedDept, userInfoData]);
 
       const filteredData = useMemo(() => {
         const effectiveTab = (selectedTab === '진단 리포트' ? '결과' : selectedTab);
+        const targetMonth = getWeekYearMonth(selectedYear, selectedWeek);
 
-        // 1. 소속(지점) 필터가 적용된 투게더사업단 대상자 목록 선별
+        // 1. 소속 필터 + 활동관리 'Y' (Month 제외) + 해당 주차(월) 기준 재직자 선별
         const targetUsers = userInfoData.filter(user => {
-          return selectedDept === '전체' || user['소속'] === selectedDept;
+          const matchDept = (selectedDept === '전체' || user['소속'] === selectedDept);
+          const matchManage = (String(user['활동관리'] || '').trim().toUpperCase() === 'Y');
+          const matchActive = isUserActiveInMonth(user, targetMonth);
+          return matchDept && matchManage && matchActive;
         });
 
         // 2. 현재 연도, 주차, 예정결과에 해당하는 활동 기록을 사번 단위로 매핑 (Map 이용 O(N) 최적화)
@@ -883,6 +896,7 @@
         if (selectedTab !== '진단 리포트') return null;
 
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, "")) || 0;
+        const targetMonth = getWeekYearMonth(selectedYear, selectedWeek);
         
         const groups = {
           lowActivity: [],
@@ -890,6 +904,15 @@
           lowClosing: [],
           lowReferral: []
         };
+
+        // 활동관리 'Y' (Month 제외) 및 선택 주차(월) 기준 재직자 사번 목록
+        const validUsers = userInfoData.filter(user => {
+          const matchDept = (selectedDept === '전체' || user['소속'] === selectedDept);
+          const matchManage = (String(user['활동관리'] || '').trim().toUpperCase() === 'Y');
+          const matchActive = isUserActiveInMonth(user, targetMonth);
+          return matchDept && matchManage && matchActive;
+        });
+        const validSabunMap = new Map(validUsers.map(u => [String(u['사번'] || '').trim(), u]));
 
         const pastResultData = data.filter(d => {
           if (d['예정결과'] !== '결과') return false;
@@ -912,16 +935,24 @@
           : [];
 
         const relevantData = pastResultData.filter(item => {
-          if (selectedDept !== '전체' && item['소속'] !== selectedDept) return false;
+          const sabun = String(item['사번'] || '').trim();
+          if (!validSabunMap.has(sabun)) return false;
           const weekStr = `${item['연도']}-${String(item['주차']).padStart(2, '0')}`;
           return targetWeeks.includes(weekStr);
         });
 
         const agg = {};
         relevantData.forEach(row => {
-          const sabun = row['사번'];
+          const sabun = String(row['사번'] || '').trim();
+          const userObj = validSabunMap.get(sabun);
           if (!agg[sabun]) {
-            agg[sabun] = { 사번: sabun, 이름: row['이름'], 소속: row['소속'], TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0, weeks: new Set() };
+            agg[sabun] = {
+              사번: sabun,
+              이름: userObj ? userObj['이름'] : row['이름'],
+              소속: userObj ? userObj['소속'] : row['소속'],
+              TA: 0, AP: 0, P: 0, C: 0, N: 0, 소개: 0, 활동계: 0,
+              weeks: new Set()
+            };
           }
           agg[sabun].TA += parseNum(row['TA']);
           agg[sabun].AP += parseNum(row['AP']);
@@ -959,7 +990,7 @@
         groups.lowReferral.sort((a, b) => a.avgReferral - b.avgReferral);
 
         return groups;
-      }, [data, selectedTab, selectedYear, selectedWeek, selectedDept, diagnosticPeriod]);
+      }, [data, userInfoData, selectedTab, selectedYear, selectedWeek, selectedDept, diagnosticPeriod]);
 
       // 퀵 버튼 상태
       const isLastWeekResult = selectedTab === '결과' && selectedYear === String(currentTimeInfo.year) && selectedWeek === String(currentTimeInfo.week - 1);
