@@ -340,7 +340,7 @@
     }) => {
       if (!isOpen) return null;
 
-      const [currentSlide, setCurrentSlide] = useState(0); // 0: 실적 MVP, 1: 활동 챔피언, 2: 베스트 팀, 3: 사업단 현황
+      const [currentSlide, setCurrentSlide] = useState(0); // 0: 실적 MVP, 1: 활동 챔피언, 2: 주간 실적 TOP 5, 3: 사업단 목표현황
       const [isPlaying, setIsPlaying] = useState(true);
       const [progress, setProgress] = useState(0);
       const [isFullscreen, setIsFullscreen] = useState(false);
@@ -367,7 +367,7 @@
           if (s) {
             userMap[s] = {
               name: u['이름'] || '',
-              dept: u['소속1'] || u['소속'] || '',
+              dept: u['소속1'] || u['소속'] || '투게더사업단',
               photoUrl: toDirectImageUrl(u['사진URL'] || u['프로필사진'] || u['사진'] || ''),
               user: u
             };
@@ -414,7 +414,7 @@
           list = userInfoData.slice(0, 3).map((u, idx) => ({
             sabun: u['사번'],
             name: u['이름'],
-            dept: u['소속1'] || u['소속'],
+            dept: u['소속1'] || u['소속'] || '투게더사업단',
             photoUrl: toDirectImageUrl(u['사진URL'] || u['프로필사진'] || ''),
             contracts: [6, 4, 3][idx] || 2,
             premium: [2800000, 1950000, 1320000][idx] || 900000
@@ -424,7 +424,7 @@
         return list.slice(0, 3);
       }, [monthlyDbData, userInfoData, anchorMonth]);
 
-      // 3. 활동 챔피언 (Activity Champion TOP 3) 계산 - [수정] 해당월의 주차 활동만 집계
+      // 3. 활동 챔피언 (Activity Champion TOP 3) 계산 - 해당월의 주차 활동만 집계
       const activityRanking = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         
@@ -434,7 +434,7 @@
           if (s) {
             userMap[s] = {
               name: u['이름'] || '',
-              dept: u['소속1'] || u['소속'] || '',
+              dept: u['소속1'] || u['소속'] || '투게더사업단',
               photoUrl: toDirectImageUrl(u['사진URL'] || u['프로필사진'] || u['사진'] || ''),
               user: u
             };
@@ -445,7 +445,6 @@
         activityData.forEach(item => {
           if (item['예정결과'] !== '결과') return;
           
-          // 해당 활동 기록의 연도/주차를 바탕으로 월(YYYY-MM) 판별 -> 기준월과 일치하는 주차만 집계
           const itemMonth = getWeekYearMonth(item['연도'], item['주차']);
           if (itemMonth !== anchorMonth) return;
 
@@ -483,7 +482,7 @@
           list = userInfoData.slice(0, 3).map((u, idx) => ({
             sabun: u['사번'],
             name: u['이름'],
-            dept: u['소속1'] || u['소속'],
+            dept: u['소속1'] || u['소속'] || '투게더사업단',
             photoUrl: toDirectImageUrl(u['사진URL'] || u['프로필사진'] || ''),
             totalScore: [48, 36, 30][idx] || 20,
             ta: [22, 16, 12][idx] || 10,
@@ -497,77 +496,71 @@
         return list.slice(0, 3);
       }, [activityData, userInfoData, anchorMonth]);
 
-      // 4. 팀 실적 및 베스트 팀 계산
-      const teamStats = useMemo(() => {
+      // 4. [신규] 현재 대시보드에서 조회 중인 주차의 보험료 실적 TOP 5 (Weekly Sales TOP 5)
+      const weeklySalesRanking = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         
-        const orgMap = {};
-        if (orgInfoData && orgInfoData.length > 0) {
-          orgInfoData.forEach(o => {
-            const orgName = String(o['조직명'] || o['소속'] || o['팀명'] || '').trim();
-            if (orgName) {
-              orgMap[orgName] = {
-                photoUrl: toDirectImageUrl(o['단체사진URL'] || o['사진URL'] || o['사진'] || ''),
-                slogan: o['슬로건'] || o['응원문구'] || o['한줄소개'] || ''
-              };
-            }
-          });
-        }
-
-        const teamAgg = {};
+        const userMap = {};
         userInfoData.forEach(u => {
-          const dept = String(u['소속1'] || u['소속'] || '').trim();
-          if (!dept) return;
-          if (!teamAgg[dept]) {
-            teamAgg[dept] = {
-              name: dept,
-              members: 0,
-              premium: 0,
-              contracts: 0,
-              photoUrl: orgMap[dept]?.photoUrl || '',
-              slogan: orgMap[dept]?.slogan || '열정으로 뭉친 최고의 드림팀!'
+          const s = String(u['사번'] || '').trim();
+          if (s) {
+            userMap[s] = {
+              name: u['이름'] || '',
+              dept: u['소속1'] || u['소속'] || '투게더사업단',
+              photoUrl: toDirectImageUrl(u['사진URL'] || u['프로필사진'] || u['사진'] || ''),
+              user: u
             };
           }
-          teamAgg[dept].members += 1;
         });
 
-        if (monthlyDbData && monthlyDbData.length > 0) {
-          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
-          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
-          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
+        const weekMap = {};
+        activityData.forEach(item => {
+          if (item['예정결과'] !== '결과') return;
+          if (String(item['연도']) !== String(selectedYear) || String(item['주차']) !== String(selectedWeek)) return;
 
-          const userDeptMap = {};
-          userInfoData.forEach(u => {
-            userDeptMap[String(u['사번'] || '').trim()] = String(u['소속1'] || u['소속'] || '').trim();
-          });
+          const sabun = String(item['사번'] || '').trim();
+          if (!sabun) return;
+          const uInfo = userMap[sabun];
+          if (!uInfo) return;
 
-          monthlyDbData.forEach(row => {
-            if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== anchorMonth) return;
-            if (colState && String(row[colState] || '').trim() !== '정상') return;
-            const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
-            const dept = userDeptMap[sabun];
-            if (dept && teamAgg[dept]) {
-              teamAgg[dept].premium += (colPrem ? parseNum(row[colPrem]) : 0);
-              teamAgg[dept].contracts += 1;
-            }
-          });
+          const prem = parseNum(item['보험료']);
+          const nVal = parseNum(item['N']);
+          const actTotal = parseNum(item['활동계']);
+
+          weekMap[sabun] = {
+            sabun,
+            name: uInfo.name,
+            dept: uInfo.dept,
+            photoUrl: uInfo.photoUrl,
+            premium: prem,
+            contracts: nVal,
+            activityTotal: actTotal
+          };
+        });
+
+        let list = Object.values(weekMap).sort((a, b) => {
+          if (b.premium !== a.premium) return b.premium - a.premium;
+          if (b.contracts !== a.contracts) return b.contracts - a.contracts;
+          return b.activityTotal - a.activityTotal;
+        });
+
+        const hasRealWeeklyPrem = list.some(item => item.premium > 0);
+        if (!hasRealWeeklyPrem && userInfoData.length > 0) {
+          list = userInfoData.slice(0, 5).map((u, idx) => ({
+            sabun: u['사번'],
+            name: u['이름'],
+            dept: u['소속1'] || u['소속'] || '투게더사업단',
+            photoUrl: toDirectImageUrl(u['사진URL'] || u['프로필사진'] || ''),
+            premium: [1200000, 850000, 600000, 450000, 300000][idx] || 200000,
+            contracts: [3, 2, 2, 1, 1][idx] || 1,
+            activityTotal: [35, 28, 22, 18, 15][idx] || 10
+          }));
         }
 
-        const teamList = Object.values(teamAgg).sort((a, b) => b.premium - a.premium);
-        const bestTeam = teamList[0] || {
-          name: '1팀',
-          members: 5,
-          premium: 6200000,
-          contracts: 19,
-          photoUrl: '',
-          slogan: '열정으로 뭉친 최고의 드림팀, 1팀 파이팅!'
-        };
+        return list.slice(0, 5);
+      }, [activityData, userInfoData, selectedYear, selectedWeek]);
 
-        return { bestTeam, teamList };
-      }, [monthlyDbData, userInfoData, orgInfoData, anchorMonth]);
-
-      // 5. 사업단 전체 실적 현황 계산
+      // 5. [신규] 투게더사업단 전체 실적 및 '조직정보' 시트의 '월간목표' 대비 달성률 계산
       const hqStats = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         
@@ -592,30 +585,44 @@
           });
         }
 
+        // 조직정보 시트에서 '투게더사업단' 정보 탐색
         const hqOrg = (orgInfoData || []).find(o => 
-          String(o['구분'] || '').includes('사업단') || 
+          String(o['조직명'] || '').includes('투게더') || 
           String(o['조직명'] || '').includes('사업단') || 
-          String(o['조직명'] || '').includes('본부')
+          String(o['구분'] || '').includes('사업단')
         );
+
         const hqPhotoUrl = toDirectImageUrl(hqOrg?.['단체사진URL'] || hqOrg?.['사진URL'] || '');
-        const hqSlogan = hqOrg?.['슬로건'] || hqOrg?.['응원문구'] || '열정과 도전으로 새로운 역사를 만들어가는 파트너스!';
+        const hqSlogan = hqOrg?.['슬로건'] || hqOrg?.['응원문구'] || '열정과 도전으로 새로운 성공 신화를 만들어가는 투게더사업단!';
+
+        // 조직정보 시트의 '월간목표' 열 자동 감지 및 파싱
+        let customGoal = 0;
+        if (hqOrg) {
+          const goalCol = Object.keys(hqOrg).find(k => k.includes('월간목표') || k.includes('목표금액') || k.includes('목표'));
+          if (goalCol) {
+            customGoal = parseNum(hqOrg[goalCol]);
+          }
+        }
+
+        // 시트에 월간목표가 없으면 30,000,000원 기본 fallback
+        const targetPremium = customGoal > 0 ? customGoal : 30000000;
 
         const now = new Date();
         const lastDayOfMonth = new Date(parseInt(anchorY || now.getFullYear(), 10), parseInt(anchorM || (now.getMonth() + 1), 10), 0);
         const diffTime = lastDayOfMonth.getTime() - now.getTime();
         const dDay = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
-        const targetPremium = 30000000;
-        const achievementRate = targetPremium > 0 ? Math.min(150, Math.round((totalPremium / targetPremium) * 100)) : 0;
+        const currentTotalPrem = totalPremium || 18500000;
+        const achievementRate = targetPremium > 0 ? Math.round((currentTotalPrem / targetPremium) * 100) : 0;
 
         return {
-          totalPremium: totalPremium || 18500000,
+          totalPremium: currentTotalPrem,
           totalContracts: totalContracts || 42,
           activeMemberCount: activeMembers.size || userInfoData.length,
           totalMembers: userInfoData.length || 10,
           dDay,
           targetPremium,
-          achievementRate: achievementRate || 62,
+          achievementRate,
           hqPhotoUrl,
           hqSlogan
         };
@@ -684,7 +691,7 @@
         return () => window.removeEventListener('keydown', handleKeyDown);
       }, [onClose]);
 
-      // 프로필 아바타 / 사진 컴포넌트 (1.5배 확대 및 선명한 링 적용)
+      // 프로필 아바타 / 사진 컴포넌트
       const ProfileAvatar = ({ photoUrl, name, rank, size = "lg" }) => {
         const [imgError, setImgError] = useState(false);
         
@@ -692,12 +699,15 @@
           1: { border: "border-amber-400 ring-8 ring-amber-400/30 shadow-amber-500/40", bg: "from-amber-500 to-yellow-600", text: "text-amber-300" },
           2: { border: "border-slate-300 ring-8 ring-slate-300/30 shadow-slate-400/40", bg: "from-slate-400 to-slate-600", text: "text-slate-200" },
           3: { border: "border-amber-700 ring-8 ring-amber-700/30 shadow-amber-800/40", bg: "from-amber-700 to-amber-900", text: "text-amber-400" },
+          4: { border: "border-blue-400 ring-6 ring-blue-400/30 shadow-blue-500/30", bg: "from-blue-600 to-indigo-700", text: "text-blue-300" },
+          5: { border: "border-indigo-400 ring-6 ring-indigo-400/30 shadow-indigo-500/30", bg: "from-indigo-600 to-purple-700", text: "text-indigo-300" },
         };
         const curColor = rankColors[rank] || rankColors[1];
         
-        // 1.5배 대형화 (기존 36/44 -> 52/68)
         const sizeClasses = size === "xl" 
           ? "w-48 h-48 md:w-64 md:h-64 lg:w-72 lg:h-72 text-6xl md:text-8xl" 
+          : size === "md"
+          ? "w-28 h-28 md:w-36 md:h-36 lg:w-44 lg:h-44 text-3xl md:text-5xl"
           : "w-36 h-36 md:w-48 md:h-48 lg:w-56 lg:h-56 text-4xl md:text-6xl";
 
         if (photoUrl && !imgError) {
@@ -723,8 +733,8 @@
       const slideTabs = [
         { label: "실적 챔피언", icon: Trophy },
         { label: "활동 열정왕", icon: Sparkles },
-        { label: "베스트 팀", icon: Users },
-        { label: "사업단 현황", icon: Target },
+        { label: "주간 실적 TOP 5", icon: Award },
+        { label: "사업단 목표현황", icon: Target },
       ];
 
       return (
@@ -746,7 +756,7 @@
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 bg-clip-text text-transparent">
-                  파트너스본부 명예의 전당
+                  투게더사업단 명예의 전당
                 </h1>
                 <p className="text-sm text-slate-400 font-medium">
                   {selectedYear}년 {monthTitle} 마감 기준 실시간 챔피언 전광판
@@ -783,7 +793,7 @@
             </div>
           </div>
 
-          {/* 중앙 슬라이드 콘텐츠 뷰 (1.5배 초대형 레이아웃) */}
+          {/* 중앙 슬라이드 콘텐츠 뷰 */}
           <div className="relative flex-1 flex items-center justify-center p-6 md:p-10 lg:p-14 overflow-hidden">
             
             {/* 좌/우 빠른 전환 화살표 */}
@@ -806,19 +816,19 @@
             <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none" />
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                SLIDE 0: 이달의 실적 챔피언 (Sales MVP TOP 3) - 1.5배 확대
+                SLIDE 0: 이달의 실적 챔피언 (Sales MVP TOP 3)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {currentSlide === 0 && (
               <div className="w-full max-w-[1650px] animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
                 <div className="text-center mb-8 md:mb-12">
                   <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-amber-500/10">
-                    <Trophy size={20} /> SALES CHAMPIONS
+                    <Trophy size={20} /> TOGETHER SALES MVP
                   </div>
                   <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white drop-shadow-md">
                     {selectedYear}년 {monthTitle} 실적 최우수 MVP
                   </h2>
                   <p className="text-slate-300 text-base md:text-2xl mt-3 font-medium">
-                    탁월한 성과와 끊임없는 도전으로 최고의 결실을 맺은 이달의 주인공입니다.
+                    탁월한 성과와 끊임없는 도전으로 최고의 결실을 맺은 투게더사업단의 주인공입니다.
                   </p>
                 </div>
 
@@ -908,7 +918,7 @@
             )}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                SLIDE 1: 이달의 활동 열정왕 (Activity Champion TOP 3) - 1.5배 확대 & 월간 주차 집계
+                SLIDE 1: 이달의 활동 열정왕 (Activity Champion TOP 3)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {currentSlide === 1 && (
               <div className="w-full max-w-[1650px] animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
@@ -982,95 +992,98 @@
             )}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                SLIDE 2: 이달의 최우수 팀 (Best Team Award) - 1.5배 확대
+                SLIDE 2: [신규] 주간 보험료 실적 TOP 5 (Weekly Sales TOP 5)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {currentSlide === 2 && (
               <div className="w-full max-w-[1650px] animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
-                <div className="text-center mb-8 md:mb-12">
-                  <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-emerald-500/10">
-                    <Users size={20} /> BEST TEAM OF THE MONTH
+                <div className="text-center mb-8 md:mb-10">
+                  <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-amber-500/10">
+                    <Award size={20} /> WEEKLY SALES TOP 5
                   </div>
                   <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white drop-shadow-md">
-                    {selectedYear}년 {monthTitle} 이달의 베스트 팀
+                    {selectedYear}년 {selectedWeek}주차 주간 실적 챔피언 TOP 5
                   </h2>
                   <p className="text-slate-300 text-base md:text-2xl mt-3 font-medium">
-                    원팀(One Team)의 시너지로 최고의 성과를 달성한 자랑스러운 최우수 팀입니다.
+                    이번 주 가장 빛나는 성과를 달성한 투게더사업단의 주간 챔피언들입니다.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 w-full max-w-6xl items-center bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-10 md:p-14 rounded-3xl border border-slate-800 shadow-2xl">
-                  
-                  {/* 좌측: 팀 단체 사진 */}
-                  <div className="lg:col-span-7 flex flex-col items-center justify-center">
-                    <div className="relative w-full aspect-video rounded-3xl overflow-hidden border-2 border-emerald-500/60 shadow-[0_0_40px_rgba(16,185,129,0.25)] bg-slate-950 flex items-center justify-center">
-                      {teamStats.bestTeam.photoUrl ? (
-                        <img 
-                          src={teamStats.bestTeam.photoUrl} 
-                          alt="팀 단체사진" 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-slate-500 p-8 text-center">
-                          <Users size={80} className="text-emerald-500/70 mb-4 animate-pulse" />
-                          <p className="text-2xl font-black text-slate-200">{teamStats.bestTeam.name} 단체 사진</p>
-                          <p className="text-sm text-slate-400 mt-2">구글 시트 '조직정보' 시트에 단체사진 링크를 등록하시면 바로 표시됩니다.</p>
+                {/* 5인 가로 카드 레이아웃 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 md:gap-6 w-full max-w-7xl">
+                  {weeklySalesRanking.map((user, idx) => {
+                    const rankNum = idx + 1;
+                    const isFirst = rankNum === 1;
+                    const isSecond = rankNum === 2;
+                    const isThird = rankNum === 3;
+
+                    const borderStyle = isFirst
+                      ? "border-2 border-amber-400 shadow-[0_0_35px_rgba(251,191,36,0.35)] bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-900 scale-105 z-20"
+                      : isSecond
+                      ? "border border-slate-300/80 shadow-xl bg-slate-900/90"
+                      : isThird
+                      ? "border border-amber-700/80 shadow-xl bg-slate-900/90"
+                      : "border border-slate-800 shadow-lg bg-slate-950/80 opacity-95";
+
+                    const badgeColor = isFirst
+                      ? "bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950"
+                      : isSecond
+                      ? "bg-slate-300 text-slate-950"
+                      : isThird
+                      ? "bg-amber-800 text-white"
+                      : "bg-slate-800 text-slate-300 border border-slate-700";
+
+                    return (
+                      <div 
+                        key={user.sabun || idx}
+                        className={`rounded-3xl p-6 flex flex-col items-center text-center transition-all hover:scale-105 ${borderStyle}`}
+                      >
+                        <div className="relative mb-5">
+                          {isFirst && (
+                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 animate-bounce">
+                              <Crown size={32} className="text-amber-400 filter drop-shadow-[0_0_12px_rgba(251,191,36,0.9)]" />
+                            </div>
+                          )}
+                          <ProfileAvatar photoUrl={user.photoUrl} name={user.name} rank={rankNum} size="md" />
+                          <div className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-xs md:text-sm font-black shadow-xl ${badgeColor}`}>
+                            {rankNum}위
+                          </div>
                         </div>
-                      )}
-                      
-                      <div className="absolute top-5 left-5 px-5 py-2 rounded-2xl bg-emerald-500 text-slate-950 font-black text-base shadow-xl flex items-center gap-2">
-                        <Award size={20} /> 1위 최우수팀
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* 우측: 팀 정보 & 실적 현황 */}
-                  <div className="lg:col-span-5 flex flex-col justify-between space-y-8">
-                    <div>
-                      <div className="text-base font-bold text-emerald-400 uppercase tracking-wider">챔피언 팀</div>
-                      <h3 className="text-5xl md:text-7xl font-black text-white mt-1">
-                        {teamStats.bestTeam.name}
-                      </h3>
-                      <div className="mt-4 p-5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-base md:text-lg font-semibold leading-relaxed">
-                        "{teamStats.bestTeam.slogan}"
-                      </div>
-                    </div>
+                        <div className="text-xs md:text-sm text-slate-400 font-bold mt-1">{user.dept}</div>
+                        <div className="text-xl md:text-2xl font-black text-white mt-1">{user.name} 파트너</div>
 
-                    <div className="grid grid-cols-2 gap-5">
-                      <div className="bg-slate-950/90 p-6 rounded-2xl border border-slate-800">
-                        <div className="text-xs md:text-sm text-slate-400 font-bold">팀 총 실적</div>
-                        <div className="text-3xl md:text-4xl font-black text-emerald-400 mt-1.5">
-                          ₩ {formatCurrency(teamStats.bestTeam.premium)}
+                        <div className="w-full mt-4 pt-4 border-t border-slate-800">
+                          <div className="text-xs text-slate-400 font-medium">주간 체결 보험료</div>
+                          <div className={`text-xl md:text-2xl lg:text-3xl font-black mt-1 ${
+                            isFirst ? "bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent" : "text-slate-100"
+                          }`}>
+                            ₩ {formatCurrency(user.premium)}
+                          </div>
+                          
+                          <div className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-slate-400 bg-slate-950/80 py-1.5 px-2 rounded-xl border border-slate-800">
+                            <span>계약 <strong className="text-amber-300 font-black">{user.contracts}건</strong></span>
+                            <span>•</span>
+                            <span>활동 <strong className="text-white font-bold">{user.activityTotal}건</strong></span>
+                          </div>
                         </div>
                       </div>
-                      <div className="bg-slate-950/90 p-6 rounded-2xl border border-slate-800">
-                        <div className="text-xs md:text-sm text-slate-400 font-bold">총 체결 건수</div>
-                        <div className="text-3xl md:text-4xl font-black text-white mt-1.5">
-                          {teamStats.bestTeam.contracts} <span className="text-base font-normal text-slate-400">건</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between p-5 bg-slate-950/60 rounded-2xl border border-slate-800 text-sm md:text-base text-slate-400 font-medium">
-                      <span>소속 파트너 수: <strong className="text-white font-bold">{teamStats.bestTeam.members}명</strong></span>
-                      <span className="text-emerald-400 font-black">1인당 평균 실적 우수 🏆</span>
-                    </div>
-                  </div>
-
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                SLIDE 3: 사업단 전체 실적 현황 (Total Dashboard) - 1.5배 확대
+                SLIDE 3: [신규] 투게더사업단 전체 실적 및 월간 목표 대비 달성률
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {currentSlide === 3 && (
               <div className="w-full max-w-[1650px] animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
                 <div className="text-center mb-8 md:mb-12">
                   <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-blue-500/10">
-                    <Target size={20} /> HEADQUARTERS MONTHLY STATUS
+                    <Target size={20} /> TOGETHER HEADQUARTERS MONTHLY GOAL
                   </div>
                   <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white drop-shadow-md">
-                    {selectedYear}년 {monthTitle} 사업단 실적 현황
+                    {selectedYear}년 {monthTitle} 투게더사업단 목표 달성 현황
                   </h2>
                   <p className="text-slate-300 text-base md:text-2xl mt-3 font-medium">
                     {hqStats.hqSlogan}
@@ -1079,47 +1092,54 @@
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 w-full max-w-6xl items-center bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-10 md:p-14 rounded-3xl border border-slate-800 shadow-2xl">
                   
-                  {/* 좌측: 사업단 단체 사진 */}
+                  {/* 좌측: 투게더사업단 단체 사진 */}
                   <div className="lg:col-span-6 flex flex-col items-center justify-center">
                     <div className="relative w-full aspect-video rounded-3xl overflow-hidden border-2 border-blue-500/50 shadow-[0_0_40px_rgba(59,130,246,0.25)] bg-slate-950 flex items-center justify-center">
                       {hqStats.hqPhotoUrl ? (
                         <img 
                           src={hqStats.hqPhotoUrl} 
-                          alt="사업단 단체사진" 
+                          alt="투게더사업단 단체사진" 
                           className="w-full h-full object-cover"
                         />
                       ) : (
                         <div className="flex flex-col items-center justify-center text-slate-500 p-8 text-center">
                           <Target size={80} className="text-blue-500/70 mb-4 animate-pulse" />
-                          <p className="text-2xl font-black text-slate-200">파트너스 사업단 단체 사진</p>
+                          <p className="text-2xl font-black text-slate-200">투게더사업단 단체 사진</p>
                           <p className="text-sm text-slate-400 mt-2">구글 시트 '조직정보' 시트에 사업단 사진을 등록할 수 있습니다.</p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* 우측: 사업단 종합 실적 수치 & D-Day */}
+                  {/* 우측: 월간 목표 vs 누적 실적 및 달성률 게이지 */}
                   <div className="lg:col-span-6 flex flex-col justify-between space-y-8">
-                    <div className="bg-slate-950/90 p-8 rounded-3xl border border-slate-800">
+                    <div className="bg-slate-950/90 p-8 rounded-3xl border border-slate-800 shadow-xl">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-black text-slate-400 uppercase">사업단 누적 실적</span>
+                        <span className="text-sm font-black text-slate-400 uppercase">월간 목표 달성 현황</span>
                         <span className="px-4 py-1.5 rounded-full bg-blue-500/25 text-blue-300 text-sm font-black shadow-md">
                           마감 D-{hqStats.dDay}
                         </span>
                       </div>
-                      <div className="text-4xl md:text-6xl lg:text-7xl font-black bg-gradient-to-r from-blue-200 via-indigo-200 to-white bg-clip-text text-transparent mt-3">
-                        ₩ {formatCurrency(hqStats.totalPremium)}
+
+                      {/* 목표액 대비 누적 실적 표시 */}
+                      <div className="mt-3">
+                        <div className="text-4xl md:text-6xl lg:text-7xl font-black bg-gradient-to-r from-blue-200 via-indigo-200 to-white bg-clip-text text-transparent">
+                          ₩ {formatCurrency(hqStats.totalPremium)}
+                        </div>
+                        <div className="text-sm md:text-base text-slate-400 font-bold mt-1.5">
+                          월간 목표: <strong className="text-slate-200">₩ {formatCurrency(hqStats.targetPremium)}</strong>
+                        </div>
                       </div>
 
-                      {/* 달성률 프로그레스 바 */}
+                      {/* 달성률 프로그레스 바 & 퍼센트 */}
                       <div className="mt-6">
-                        <div className="flex justify-between text-sm font-bold mb-2">
-                          <span className="text-slate-400">월간 목표 달성률</span>
-                          <span className="text-blue-400 text-base font-black">{hqStats.achievementRate}%</span>
+                        <div className="flex justify-between items-end mb-2">
+                          <span className="text-sm font-bold text-slate-400">목표 달성률</span>
+                          <span className="text-3xl md:text-4xl font-black text-blue-400">{hqStats.achievementRate}%</span>
                         </div>
-                        <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="w-full h-5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
                           <div 
-                            className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-400 rounded-full transition-all duration-1000 shadow-md shadow-blue-500/50"
+                            className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-400 rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(59,130,246,0.6)]"
                             style={{ width: `${Math.min(100, hqStats.achievementRate)}%` }}
                           />
                         </div>
@@ -1181,8 +1201,6 @@
 
         </div>
       );
-    };
-
     // --- 메인 App 컴포넌트 ---
     function App() {
       // ─────────────────────────────────────────────────────
