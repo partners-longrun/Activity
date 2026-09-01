@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -355,7 +355,7 @@
       }, [selectedYear, selectedWeek]);
 
       const [anchorY, anchorM] = anchorMonth.split('-');
-      const monthTitle = `${parseInt(anchorM || '8', 10)}??;
+      const monthTitle = `${parseInt(anchorM || '8', 10)}월`;
 
       const prevMonth = useMemo(() => {
         const y = parseInt(anchorY || '2026', 10);
@@ -363,49 +363,51 @@
         if (m === 1) return `${y - 1}-12`;
         return `${y}-${String(m - 1).padStart(2, '0')}`;
       }, [anchorY, anchorM]);
-      const prevMonthTitle = `${parseInt(prevMonth.split('-')[1], 10)}??;
+      const prevMonthTitle = `${parseInt(prevMonth.split('-')[1], 10)}월`;
 
-      // ?ш쾶?붿궗?낅떒 ?뚯냽 ?ъ슜??留?      const togetherUserMap = useMemo(() => {
+      // 투게더사업단 소속 사용자 맵 (이름 뒤 '파트너' 제거)
+      const togetherUserMap = useMemo(() => {
         const map = {};
         userInfoData.forEach(u => {
-          const s = String(u['?щ쾲'] || '').trim();
+          const s = String(u['사번'] || '').trim();
           if (!s) return;
-          const dept = String(u['?뚯냽1'] || u['?뚯냽'] || '').trim();
+          const dept = String(u['소속1'] || u['소속'] || '').trim();
           map[s] = {
             sabun: s,
-            name: String(u['?대쫫'] || '').trim(),
-            dept: dept || '?ш쾶?붿궗?낅떒',
-            photoUrl: toDirectImageUrl(u['?ъ쭊URL'] || u['?꾨줈?꾩궗吏?] || u['?ъ쭊'] || ''),
+            name: String(u['이름'] || '').trim(),
+            dept: dept || '투게더사업단',
+            photoUrl: toDirectImageUrl(u['사진URL'] || u['프로필사진'] || u['사진'] || ''),
             user: u
           };
         });
         return map;
       }, [userInfoData]);
 
-      // ?쒖긽 ??곸옄 ?먮퀎 ?⑥닔
+      // 시상 대상자 판별 함수 (이정호 단장은 시상/순위 대상에서 제외, 사업단 전체 통계에는 포함)
       const isAwardEligible = (u) => {
         if (!u) return false;
-        const name = String(u.name || u['?대쫫'] || '').trim();
-        const role = String(u.user?.['吏곸콉'] || u.user?.['吏곴툒'] || u['吏곸콉'] || '').trim();
-        if (name.includes('?댁젙??) || role.includes('?⑥옣')) {
+        const name = String(u.name || u['이름'] || '').trim();
+        const role = String(u.user?.['직책'] || u.user?.['직급'] || u['직책'] || '').trim();
+        if (name.includes('이정호') || role.includes('단장')) {
           return false;
         }
         return true;
       };
 
-      // SLIDE 0: 吏?쒕떖 ?ㅼ쟻 梨뷀뵾??      const lastMonthChampions = useMemo(() => {
+      // SLIDE 0: 지난달 실적 챔피언 (월 보험료 1등 & 월 건수 1등 - 중복 시상 없음)
+      const lastMonthChampions = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         const agg = {};
 
         if (monthlyDbData && monthlyDbData.length > 0) {
-          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('留덇컧??));
-          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('紐⑥쭛?먯궗踰?) || k.includes('?щ쾲'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('蹂댄뿕猷?));
-          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('怨꾩빟?곹깭'));
+          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
+          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
+          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
+          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
 
           monthlyDbData.forEach(row => {
             if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== prevMonth) return;
-            if (colState && String(row[colState] || '').trim() !== '?뺤긽') return;
+            if (colState && String(row[colState] || '').trim() !== '정상') return;
 
             const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
             if (!sabun) return;
@@ -428,35 +430,35 @@
           });
         }
 
-        // 1. 蹂댄뿕猷??쒖쐞 ?뺣젹
+        // 1. 보험료 순위 정렬
         const listByPrem = Object.values(agg).filter(isAwardEligible).sort((a, b) => b.premium - a.premium);
         let premChamp = listByPrem[0];
 
-        // 2. 蹂댄뿕猷?1?깆쓣 ?쒖쇅???섎㉧吏 ?몄썝 以묒뿉??嫄댁닔 1???좎젙
+        // 2. 보험료 1등을 제외한 나머지 인원 중에서 건수 1등 선정 (중복 시상 방지)
         const listByCont = Object.values(agg).filter(isAwardEligible).sort((a, b) => {
           if (b.contracts !== a.contracts) return b.contracts - a.contracts;
           return b.premium - a.premium;
         });
         let contChamp = listByCont.find(u => u.sabun !== premChamp?.sabun) || listByCont[1];
 
-        // ?곗씠???놁쓣 ??fallback
+        // 데이터 없을 시 fallback
         if (!premChamp && userInfoData.length > 0) {
           const eligibleUsers = userInfoData.filter(isAwardEligible);
           const u1 = eligibleUsers[0] || {};
           premChamp = {
-            sabun: u1['?щ쾲'],
-            name: u1['?대쫫'] || '源?곸뾽',
-            dept: u1['?뚯냽1'] || u1['?뚯냽'] || '?ш쾶?붿궗?낅떒',
-            photoUrl: toDirectImageUrl(u1['?ъ쭊URL'] || ''),
+            sabun: u1['사번'],
+            name: u1['이름'] || '김영업',
+            dept: u1['소속1'] || u1['소속'] || '투게더사업단',
+            photoUrl: toDirectImageUrl(u1['사진URL'] || ''),
             premium: 3450000,
             contracts: 7
           };
           const u2 = eligibleUsers[1] || eligibleUsers[0] || {};
           contChamp = {
-            sabun: u2['?щ쾲'],
-            name: u2['?대쫫'] || '?댁껜寃?,
-            dept: u2['?뚯냽1'] || u2['?뚯냽'] || '?ш쾶?붿궗?낅떒',
-            photoUrl: toDirectImageUrl(u2['?ъ쭊URL'] || ''),
+            sabun: u2['사번'],
+            name: u2['이름'] || '이체결',
+            dept: u2['소속1'] || u2['소속'] || '투게더사업단',
+            photoUrl: toDirectImageUrl(u2['사진URL'] || ''),
             premium: 2890000,
             contracts: 9
           };
@@ -465,20 +467,20 @@
         return { premChamp, contChamp };
       }, [monthlyDbData, togetherUserMap, userInfoData, prevMonth]);
 
-      // SLIDE 1: ?대쾲???ㅼ쟻 ?꾪솴 1
+      // SLIDE 1: 이번달 실적 현황 1 (보험료 1, 2, 3등)
       const monthlyPremiumTop3 = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         const agg = {};
 
         if (monthlyDbData && monthlyDbData.length > 0) {
-          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('留덇컧??));
-          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('紐⑥쭛?먯궗踰?) || k.includes('?щ쾲'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('蹂댄뿕猷?));
-          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('怨꾩빟?곹깭'));
+          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
+          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
+          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
+          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
 
           monthlyDbData.forEach(row => {
             if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== anchorMonth) return;
-            if (colState && String(row[colState] || '').trim() !== '?뺤긽') return;
+            if (colState && String(row[colState] || '').trim() !== '정상') return;
 
             const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
             if (!sabun) return;
@@ -505,10 +507,10 @@
         if (list.length === 0 && userInfoData.length > 0) {
           const eligibleUsers = userInfoData.filter(isAwardEligible);
           list = eligibleUsers.slice(0, 3).map((u, idx) => ({
-            sabun: u['?щ쾲'],
-            name: u['?대쫫'],
-            dept: u['?뚯냽1'] || u['?뚯냽'] || '?ш쾶?붿궗?낅떒',
-            photoUrl: toDirectImageUrl(u['?ъ쭊URL'] || ''),
+            sabun: u['사번'],
+            name: u['이름'],
+            dept: u['소속1'] || u['소속'] || '투게더사업단',
+            photoUrl: toDirectImageUrl(u['사진URL'] || ''),
             contracts: [6, 4, 3][idx] || 2,
             premium: [2800000, 1950000, 1320000][idx] || 900000
           }));
@@ -516,20 +518,20 @@
         return list.slice(0, 3);
       }, [monthlyDbData, togetherUserMap, userInfoData, anchorMonth]);
 
-      // SLIDE 2: ?대쾲???ㅼ쟻 ?꾪솴 2
+      // SLIDE 2: 이번달 실적 현황 2 (건수 1, 2, 3등)
       const monthlyContractsTop3 = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         const agg = {};
 
         if (monthlyDbData && monthlyDbData.length > 0) {
-          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('留덇컧??));
-          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('紐⑥쭛?먯궗踰?) || k.includes('?щ쾲'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('蹂댄뿕猷?));
-          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('怨꾩빟?곹깭'));
+          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
+          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
+          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
+          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
 
           monthlyDbData.forEach(row => {
             if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== anchorMonth) return;
-            if (colState && String(row[colState] || '').trim() !== '?뺤긽') return;
+            if (colState && String(row[colState] || '').trim() !== '정상') return;
 
             const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
             if (!sabun) return;
@@ -560,10 +562,10 @@
         if (list.length === 0 && userInfoData.length > 0) {
           const eligibleUsers = userInfoData.filter(isAwardEligible);
           list = eligibleUsers.slice(0, 3).map((u, idx) => ({
-            sabun: u['?щ쾲'],
-            name: u['?대쫫'],
-            dept: u['?뚯냽1'] || u['?뚯냽'] || '?ш쾶?붿궗?낅떒',
-            photoUrl: toDirectImageUrl(u['?ъ쭊URL'] || ''),
+            sabun: u['사번'],
+            name: u['이름'],
+            dept: u['소속1'] || u['소속'] || '투게더사업단',
+            photoUrl: toDirectImageUrl(u['사진URL'] || ''),
             contracts: [8, 6, 5][idx] || 3,
             premium: [2100000, 2450000, 1800000][idx] || 900000
           }));
@@ -571,22 +573,23 @@
         return list.slice(0, 3);
       }, [monthlyDbData, togetherUserMap, userInfoData, anchorMonth]);
 
-      // SLIDE 3 & 4: 二쇨컙 ?ㅼ쟻 ?꾪솴??      const { weeklyPremiumTop10, weeklyContractsTop10 } = useMemo(() => {
+      // SLIDE 3 & 4: 주간 실적 현황판 (보험료 1~10위 & 건수 1~10위)
+      const { weeklyPremiumTop10, weeklyContractsTop10 } = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         const weekMap = {};
 
         activityData.forEach(item => {
-          if (item['?덉젙寃곌낵'] !== '寃곌낵') return;
-          if (String(item['?곕룄']) !== String(selectedYear) || String(item['二쇱감']) !== String(selectedWeek)) return;
+          if (item['예정결과'] !== '결과') return;
+          if (String(item['연도']) !== String(selectedYear) || String(item['주차']) !== String(selectedWeek)) return;
 
-          const sabun = String(item['?щ쾲'] || '').trim();
+          const sabun = String(item['사번'] || '').trim();
           if (!sabun) return;
           const uInfo = togetherUserMap[sabun];
           if (!uInfo) return;
 
-          const prem = parseNum(item['蹂댄뿕猷?]);
+          const prem = parseNum(item['보험료']);
           const nVal = parseNum(item['N']);
-          const actTotal = parseNum(item['?쒕룞怨?]);
+          const actTotal = parseNum(item['활동계']);
 
           if (!weekMap[sabun]) {
             weekMap[sabun] = {
@@ -620,10 +623,10 @@
           const sampleCont = [7, 6, 5, 4, 3, 3, 2, 2, 1, 1];
           const eligibleUsers = userInfoData.filter(isAwardEligible);
           listPrem = eligibleUsers.slice(0, 10).map((u, idx) => ({
-            sabun: u['?щ쾲'],
-            name: u['?대쫫'],
-            dept: u['?뚯냽1'] || u['?뚯냽'] || '?ш쾶?붿궗?낅떒',
-            photoUrl: toDirectImageUrl(u['?ъ쭊URL'] || ''),
+            sabun: u['사번'],
+            name: u['이름'],
+            dept: u['소속1'] || u['소속'] || '투게더사업단',
+            photoUrl: toDirectImageUrl(u['사진URL'] || ''),
             premium: samplePrem[idx] || 100000,
             contracts: sampleCont[idx] || 1
           }));
@@ -636,26 +639,27 @@
         };
       }, [activityData, togetherUserMap, userInfoData, selectedYear, selectedWeek]);
 
-      // SLIDE 5: ?ш쾶?붿궗?낅떒 紐⑺몴?ъ꽦 ?꾪솴
+      // SLIDE 5: 투게더사업단 목표달성 현황
       const hqStats = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         
-        // 1. ?대떦??湲곗? ?ш쾶?붿궗?낅떒 ?ъ쭅 ?몄썝 ?꾪꽣留?        const togetherEmployedUsers = (userInfoData || []).filter(u => {
-          const dept = String(u['?뚯냽1'] || u['?뚯냽'] || '').trim();
-          if (!dept.includes('?ш쾶??)) return false;
+        // 1. 해당월 기준 투게더사업단 재직 인원 필터링
+        const togetherEmployedUsers = (userInfoData || []).filter(u => {
+          const dept = String(u['소속1'] || u['소속'] || '').trim();
+          if (!dept.includes('투게더')) return false;
 
-          const status = String(u['?ъ쭅援щ텇'] || u['?곹깭'] || u['?ъ쭅?щ?'] || '').trim();
-          if (status.includes('?댁궗')) return false;
+          const status = String(u['재직구분'] || u['상태'] || u['재직여부'] || '').trim();
+          if (status.includes('퇴사')) return false;
 
-          // ?댁궗??泥댄겕
-          const outDate = String(u['?댁궗??] || u['?댁궗?쇱옄'] || '').trim();
+          // 퇴사일 체크
+          const outDate = String(u['퇴사일'] || u['퇴사일자'] || '').trim();
           if (outDate && outDate.length >= 7) {
             const outMonth = outDate.substring(0, 7).replace(/[^0-9-]/g, '');
             if (outMonth < anchorMonth) return false;
           }
 
-          // ?낆궗??泥댄겕
-          const inDate = String(u['?낆궗??] || u['?낆궗?쇱옄'] || '').trim();
+          // 입사일 체크
+          const inDate = String(u['입사일'] || u['입사일자'] || '').trim();
           if (inDate && inDate.length >= 7) {
             const inMonth = inDate.substring(0, 7).replace(/[^0-9-]/g, '');
             if (inMonth > anchorMonth) return false;
@@ -664,23 +668,23 @@
           return true;
         });
 
-        const employedSabunSet = new Set(togetherEmployedUsers.map(u => String(u['?щ쾲'] || '').trim()).filter(Boolean));
+        const employedSabunSet = new Set(togetherEmployedUsers.map(u => String(u['사번'] || '').trim()).filter(Boolean));
 
         let totalPremium = 0;
         let totalContracts = 0;
         const activeSellersSet = new Set();
 
-        // 2. ?붿떎??DB?먯꽌 ?ㅼ쟻 ?⑹궛 諛?蹂댁옣???곌툑??1嫄??댁긽 ?먮ℓ??吏묎퀎
+        // 2. 월실적_DB에서 실적 합산 및 보장성/연금성 1건 이상 판매자 집계
         if (monthlyDbData && monthlyDbData.length > 0) {
-          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('留덇컧??));
-          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('紐⑥쭛?먯궗踰?) || k.includes('?щ쾲'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('蹂댄뿕猷?));
-          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('怨꾩빟?곹깭'));
-          const colProd = Object.keys(monthlyDbData[0]).find(k => k.includes('?곹뭹援?') || k.includes('?곹뭹援?) || k.includes('?곹뭹遺꾨쪟') || k.includes('?곹뭹醫낅쪟'));
+          const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
+          const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
+          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
+          const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
+          const colProd = Object.keys(monthlyDbData[0]).find(k => k.includes('상품군1') || k.includes('상품군') || k.includes('상품분류') || k.includes('상품종류'));
 
           monthlyDbData.forEach(row => {
             if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== anchorMonth) return;
-            if (colState && String(row[colState] || '').trim() !== '?뺤긽') return;
+            if (colState && String(row[colState] || '').trim() !== '정상') return;
 
             const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
             if (!sabun || !togetherUserMap[sabun]) return;
@@ -690,7 +694,7 @@
 
             if (employedSabunSet.has(sabun)) {
               const prodVal = colProd ? String(row[colProd] || '').trim() : '';
-              if (!colProd || prodVal.includes('蹂댁옣') || prodVal.includes('?곌툑') || prodVal === '') {
+              if (!colProd || prodVal.includes('보장') || prodVal.includes('연금') || prodVal === '') {
                 activeSellersSet.add(sabun);
               }
             }
@@ -698,17 +702,17 @@
         }
 
         const hqOrg = (orgInfoData || []).find(o => 
-          String(o['議곗쭅紐?] || '').includes('?ш쾶??) || 
-          String(o['議곗쭅紐?] || '').includes('?ъ뾽??) || 
-          String(o['援щ텇'] || '').includes('?ъ뾽??)
+          String(o['조직명'] || '').includes('투게더') || 
+          String(o['조직명'] || '').includes('사업단') || 
+          String(o['구분'] || '').includes('사업단')
         );
 
-        const hqPhotoUrl = toDirectImageUrl(hqOrg?.['?⑥껜?ъ쭊URL'] || hqOrg?.['?ъ쭊URL'] || '');
-        const hqSlogan = hqOrg?.['?щ줈嫄?] || hqOrg?.['?묒썝臾멸뎄'] || '?댁젙怨??꾩쟾?쇰줈 ?덈줈???깃났 ?좏솕瑜?留뚮뱾?닿????ш쾶?붿궗?낅떒!';
+        const hqPhotoUrl = toDirectImageUrl(hqOrg?.['단체사진URL'] || hqOrg?.['사진URL'] || '');
+        const hqSlogan = hqOrg?.['슬로건'] || hqOrg?.['응원문구'] || '열정과 도전으로 새로운 성공 신화를 만들어가는 투게더사업단!';
 
         let customGoal = 0;
         if (hqOrg) {
-          const goalCol = Object.keys(hqOrg).find(k => k.includes('?붽컙紐⑺몴') || k.includes('紐⑺몴湲덉븸') || k.includes('紐⑺몴'));
+          const goalCol = Object.keys(hqOrg).find(k => k.includes('월간목표') || k.includes('목표금액') || k.includes('목표'));
           if (goalCol) {
             customGoal = parseNum(hqOrg[goalCol]);
           }
@@ -740,7 +744,7 @@
         };
       }, [monthlyDbData, togetherUserMap, userInfoData, orgInfoData, anchorMonth, anchorY, anchorM]);
 
-      // ?щ씪?대뱶??10珥???대㉧
+      // 슬라이드쇼 10초 타이머
       useEffect(() => {
         if (!isPlaying) return;
 
@@ -788,7 +792,8 @@
         }
       };
 
-      // ?ㅻ낫???⑥텞??      useEffect(() => {
+      // 키보드 단축키
+      useEffect(() => {
         const handleKeyDown = (e) => {
           if (e.key === 'Escape') onClose();
           else if (e.key === ' ' || e.code === 'Space') {
@@ -801,6 +806,7 @@
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
       }, [onClose]);
+
       const ProfileAvatar = ({ photoUrl, name, rank, size = "lg" }) => {
         const [imgError, setImgError] = useState(false);
         
