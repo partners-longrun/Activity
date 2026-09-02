@@ -642,27 +642,32 @@
       // SLIDE 5: 투게더사업단 목표달성 현황
       const hqStats = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
+        const anchorYmNum = parseInt(anchorMonth.replace(/[^0-9]/g, ''), 10); // 예: 202608
         
-        // 1. 해당월 기준 투게더사업단 재직 인원 필터링
+        // 1. 해당월 기준 투게더사업단 재직 인원 필터링 (퇴사여부 열의 마지막 근무 연월(YYYYMM) 기준)
         const togetherEmployedUsers = (userInfoData || []).filter(u => {
           const dept = String(u['소속1'] || u['소속'] || '').trim();
           if (!dept.includes('투게더')) return false;
 
-          const status = String(u['재직구분'] || u['상태'] || u['재직여부'] || '').trim();
-          if (status.includes('퇴사')) return false;
-
-          // 퇴사일 체크
-          const outDate = String(u['퇴사일'] || u['퇴사일자'] || '').trim();
-          if (outDate && outDate.length >= 7) {
-            const outMonth = outDate.substring(0, 7).replace(/[^0-9-]/g, '');
-            if (outMonth < anchorMonth) return false;
+          // '퇴사여부' 열의 값은 마지막 근무한 연월 (예: 202607 -> 7월까지 근무, 8월부터 퇴사)
+          const outVal = String(u['퇴사여부'] || u['퇴사일'] || u['퇴사일자'] || u['퇴사월'] || u['퇴사년월'] || '').replace(/[^0-9]/g, '').trim();
+          if (outVal.length >= 6) {
+            const lastWorkYm = parseInt(outVal.substring(0, 6), 10);
+            // lastWorkYm이 anchorYmNum보다 작으면 anchorMonth에는 이미 퇴사한 상태
+            if (lastWorkYm < anchorYmNum) return false;
+          } else if (outVal.length > 0 && isNaN(Number(outVal))) {
+            const status = String(u['퇴사여부'] || u['재직구분'] || u['상태'] || u['재직여부'] || '').trim();
+            if (status.includes('퇴사')) return false;
+          } else {
+            const status = String(u['재직구분'] || u['상태'] || u['재직여부'] || '').trim();
+            if (status.includes('퇴사')) return false;
           }
 
-          // 입사일 체크
-          const inDate = String(u['입사일'] || u['입사일자'] || '').trim();
-          if (inDate && inDate.length >= 7) {
-            const inMonth = inDate.substring(0, 7).replace(/[^0-9-]/g, '');
-            if (inMonth > anchorMonth) return false;
+          // 입사일 체크 (기준월 이후 입사자는 제외)
+          const inVal = String(u['입사일'] || u['입사일자'] || u['입사월'] || u['입사년월'] || '').replace(/[^0-9]/g, '').trim();
+          if (inVal.length >= 6) {
+            const inYm = parseInt(inVal.substring(0, 6), 10);
+            if (inYm > anchorYmNum) return false;
           }
 
           return true;
@@ -1171,12 +1176,12 @@
             <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none" />
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                SLIDE 0: 지난달 실적 챔피언 (타이틀 상단 배치 & 본문 간격 확장)
+                SLIDE 0: 지난달 실적 챔피언 (타이틀 유지 & 본문 위치 상향)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {currentSlide === 0 && (
-              <div className="w-full max-w-[1750px] h-full flex flex-col justify-between items-center py-2 px-4 animate-in fade-in zoom-in-95 duration-500">
+              <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
                 {/* 상단 타이틀 */}
-                <div className="text-center mt-1 mb-8 md:mb-12">
+                <div className="text-center mt-1 mb-6 md:mb-8">
                   <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-amber-500/10">
                     <Crown size={20} /> LAST MONTH CHAMPIONS
                   </div>
@@ -1189,269 +1194,275 @@
                 </div>
 
                 {/* 2대 챔피언 대형 듀얼 카드 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-14 w-full max-w-[1600px] mb-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-14 w-full max-w-[1600px] mt-2">
                   
                   {/* 🏆 지난달 월 보험료 1등 */}
-                  {lastMonthChampions.premChamp && (
-                    <div className="bg-gradient-to-b from-amber-950/60 via-slate-900 to-slate-900 rounded-3xl p-8 md:p-12 lg:p-14 border-2 border-amber-400 shadow-[0_0_50px_rgba(251,191,36,0.35)] flex flex-col items-center text-center relative hover:scale-102 transition-all">
-                      <div className="absolute -top-6 px-7 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-lg md:text-xl shadow-xl flex items-center gap-2 whitespace-nowrap">
-                        <Trophy size={22} /> {prevMonthTitle} 월 보험료 1등
-                      </div>
-
-                      <div className="relative my-6">
-                        <ProfileAvatar photoUrl={lastMonthChampions.premChamp.photoUrl} name={lastMonthChampions.premChamp.name} rank={1} size="xl" />
-                      </div>
-
-                      <div className="text-lg md:text-xl text-amber-400 font-bold">{lastMonthChampions.premChamp.dept}</div>
-                      <div className="text-4xl md:text-6xl font-black text-white mt-1.5">{lastMonthChampions.premChamp.name}</div>
-
-                      <div className="w-full mt-6 pt-6 border-t border-amber-500/30">
-                        <div className="text-sm md:text-base text-slate-400 font-semibold">{prevMonthTitle} 최종 체결 보험료</div>
-                        <div className="text-4xl md:text-6xl lg:text-7xl font-black bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 bg-clip-text text-transparent mt-1.5 whitespace-nowrap">
-                          ₩ {formatCurrency(lastMonthChampions.premChamp.premium)}
+                  {(() => {
+                    const champ = lastMonthChampions.premChamp || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
+                    return (
+                      <div className="bg-gradient-to-b from-amber-950/60 via-slate-900 to-slate-900 rounded-3xl p-8 md:p-12 lg:p-14 border-2 border-amber-400 shadow-[0_0_50px_rgba(251,191,36,0.35)] flex flex-col items-center text-center relative hover:scale-102 transition-all">
+                        <div className="absolute -top-6 px-7 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-lg md:text-xl shadow-xl flex items-center gap-2 whitespace-nowrap">
+                          <Trophy size={22} /> {prevMonthTitle} 월 보험료 1등
                         </div>
-                        <div className="inline-block mt-3 px-6 py-2 bg-amber-400/20 text-amber-300 rounded-full text-base md:text-lg font-black">
-                          총 {lastMonthChampions.premChamp.contracts}건 체결 👑
+
+                        <div className="relative my-6">
+                          <ProfileAvatar photoUrl={champ.photoUrl} name={champ.name} rank={1} size="xl" />
+                        </div>
+
+                        <div className="text-lg md:text-xl text-amber-400 font-bold">{champ.dept}</div>
+                        <div className="text-4xl md:text-6xl font-black text-white mt-1.5">{champ.name}</div>
+
+                        <div className="w-full mt-6 pt-6 border-t border-amber-500/30">
+                          <div className="text-sm md:text-base text-slate-400 font-semibold">{prevMonthTitle} 최종 체결 보험료</div>
+                          <div className="text-4xl md:text-6xl lg:text-7xl font-black bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 bg-clip-text text-transparent mt-1.5 whitespace-nowrap">
+                            ₩ {formatCurrency(champ.premium)}
+                          </div>
+                          <div className="inline-block mt-3 px-6 py-2 bg-amber-400/20 text-amber-300 rounded-full text-base md:text-lg font-black">
+                            총 {champ.contracts}건 체결 👑
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* 🎯 지난달 월 건수 1등 */}
-                  {lastMonthChampions.contChamp && (
-                    <div className="bg-gradient-to-b from-blue-950/60 via-slate-900 to-slate-900 rounded-3xl p-8 md:p-12 lg:p-14 border-2 border-blue-400 shadow-[0_0_50px_rgba(59,130,246,0.35)] flex flex-col items-center text-center relative hover:scale-102 transition-all">
-                      <div className="absolute -top-6 px-7 py-2.5 rounded-full bg-gradient-to-r from-blue-400 to-indigo-500 text-white font-black text-lg md:text-xl shadow-xl flex items-center gap-2 whitespace-nowrap">
-                        <Sparkles size={22} /> {prevMonthTitle} 월 체결건수 1등
-                      </div>
-
-                      <div className="relative my-6">
-                        <ProfileAvatar photoUrl={lastMonthChampions.contChamp.photoUrl} name={lastMonthChampions.contChamp.name} rank={2} size="xl" />
-                      </div>
-
-                      <div className="text-lg md:text-xl text-blue-400 font-bold">{lastMonthChampions.contChamp.dept}</div>
-                      <div className="text-4xl md:text-6xl font-black text-white mt-1.5">{lastMonthChampions.contChamp.name}</div>
-
-                      <div className="w-full mt-6 pt-6 border-t border-blue-500/30">
-                        <div className="text-sm md:text-base text-slate-400 font-semibold">{prevMonthTitle} 최종 체결 건수</div>
-                        <div className="text-4xl md:text-6xl lg:text-7xl font-black bg-gradient-to-r from-blue-200 via-indigo-200 to-white bg-clip-text text-transparent mt-1.5 whitespace-nowrap">
-                          {lastMonthChampions.contChamp.contracts} <span className="text-3xl md:text-4xl font-bold text-blue-300">건</span>
+                  {(() => {
+                    const champ = lastMonthChampions.contChamp || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
+                    return (
+                      <div className="bg-gradient-to-b from-blue-950/60 via-slate-900 to-slate-900 rounded-3xl p-8 md:p-12 lg:p-14 border-2 border-blue-400 shadow-[0_0_50px_rgba(59,130,246,0.35)] flex flex-col items-center text-center relative hover:scale-102 transition-all">
+                        <div className="absolute -top-6 px-7 py-2.5 rounded-full bg-gradient-to-r from-blue-400 to-indigo-500 text-white font-black text-lg md:text-xl shadow-xl flex items-center gap-2 whitespace-nowrap">
+                          <Sparkles size={22} /> {prevMonthTitle} 월 체결건수 1등
                         </div>
-                        <div className="inline-block mt-3 px-6 py-2 bg-blue-400/20 text-blue-300 rounded-full text-base md:text-lg font-black">
-                          보험료 ₩ {formatCurrency(lastMonthChampions.contChamp.premium)} ⭐
+
+                        <div className="relative my-6">
+                          <ProfileAvatar photoUrl={champ.photoUrl} name={champ.name} rank={2} size="xl" />
+                        </div>
+
+                        <div className="text-lg md:text-xl text-blue-400 font-bold">{champ.dept}</div>
+                        <div className="text-4xl md:text-6xl font-black text-white mt-1.5">{champ.name}</div>
+
+                        <div className="w-full mt-6 pt-6 border-t border-blue-500/30">
+                          <div className="text-sm md:text-base text-slate-400 font-semibold">{prevMonthTitle} 최종 체결 건수</div>
+                          <div className="text-4xl md:text-6xl lg:text-7xl font-black bg-gradient-to-r from-blue-200 via-indigo-200 to-white bg-clip-text text-transparent mt-1.5 whitespace-nowrap">
+                            {champ.contracts} <span className="text-3xl md:text-4xl font-bold text-blue-300">건</span>
+                          </div>
+                          <div className="inline-block mt-3 px-6 py-2 bg-blue-400/20 text-blue-300 rounded-full text-base md:text-lg font-black">
+                            보험료 ₩ {formatCurrency(champ.premium)} ⭐
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                 </div>
               </div>
             )}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                SLIDE 1: 이번달 실적 현황 1 (타이틀 상단 & 1등 포디움 폭 대폭 확장)
+                SLIDE 1: 이번달 실적 현황 1 (항상 1, 2, 3등 포디움 유지 & 1등 폭 확장)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            {currentSlide === 1 && (
-              <div className="w-full max-w-[1750px] h-full flex flex-col justify-between items-center py-2 px-4 animate-in fade-in zoom-in-95 duration-500">
-                {/* 상단 타이틀 */}
-                <div className="text-center mt-1 mb-8 md:mb-12">
-                  <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-amber-500/10">
-                    <Trophy size={20} /> MONTHLY PREMIUM TOP 3
-                  </div>
-                  <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white drop-shadow-md">
-                    {selectedYear}년 {monthTitle} 보험료 챔피언 TOP 3
-                  </h2>
-                  <p className="text-slate-300 text-base md:text-2xl mt-3 font-medium">
-                    당월 누적 체결 보험료 기준 가장 앞서나가는 투게더사업단의 주역들입니다.
-                  </p>
-                </div>
+            {currentSlide === 1 && (() => {
+              const p1 = monthlyPremiumTop3[0] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
+              const p2 = monthlyPremiumTop3[1] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
+              const p3 = monthlyPremiumTop3[2] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
 
-                {/* 3단 포디움 (1등 카드 폭을 넓힌 12그리드 구조: 3 - 6 - 3) */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 items-end w-full max-w-[1700px] mb-2">
-                  
-                  {/* 🥈 2위 (3칸) */}
-                  {monthlyPremiumTop3[1] && (
+              return (
+                <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
+                  {/* 상단 타이틀 */}
+                  <div className="text-center mt-1 mb-6 md:mb-8">
+                    <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-amber-500/10">
+                      <Trophy size={20} /> MONTHLY PREMIUM TOP 3
+                    </div>
+                    <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white drop-shadow-md">
+                      {selectedYear}년 {monthTitle} 보험료 챔피언 TOP 3
+                    </h2>
+                    <p className="text-slate-300 text-base md:text-2xl mt-3 font-medium">
+                      당월 누적 체결 보험료 기준 가장 앞서나가는 투게더사업단의 주역들입니다.
+                    </p>
+                  </div>
+
+                  {/* 3단 포디움 (항상 2위-1위-3위 고정 렌더링) */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 items-end w-full max-w-[1700px] mt-2">
+                    
+                    {/* 🥈 2위 (3칸) */}
                     <div className="md:col-span-3 flex flex-col items-center">
                       <div className="relative mb-5">
-                        <ProfileAvatar photoUrl={monthlyPremiumTop3[1].photoUrl} name={monthlyPremiumTop3[1].name} rank={2} size="lg" />
+                        <ProfileAvatar photoUrl={p2.photoUrl} name={p2.name} rank={2} size="lg" />
                         <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-full bg-slate-300 text-slate-950 font-black text-sm md:text-base shadow-xl whitespace-nowrap">
                           2nd
                         </div>
                       </div>
                       <div className="w-full bg-gradient-to-t from-slate-900 via-slate-800/90 to-slate-800 rounded-3xl p-6 md:p-8 border border-slate-700 text-center shadow-2xl">
-                        <div className="text-base md:text-lg text-slate-400 font-bold truncate">{monthlyPremiumTop3[1].dept}</div>
-                        <div className="text-2xl md:text-4xl font-black text-white mt-1 truncate">{monthlyPremiumTop3[1].name}</div>
+                        <div className="text-base md:text-lg text-slate-400 font-bold truncate">{p2.dept}</div>
+                        <div className="text-2xl md:text-4xl font-black text-white mt-1 truncate">{p2.name}</div>
                         <div className="mt-4 pt-4 border-t border-slate-700/80">
                           <div className="text-xs md:text-sm text-slate-400 font-medium">당월 체결 보험료</div>
                           <div className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-200 mt-1 whitespace-nowrap">
-                            ₩ {formatCurrency(monthlyPremiumTop3[1].premium)}
+                            ₩ {formatCurrency(p2.premium)}
                           </div>
                           <div className="inline-block mt-2.5 px-4 py-1 bg-slate-700/60 text-slate-300 rounded-full text-xs md:text-sm font-bold">
-                            {monthlyPremiumTop3[1].contracts}건 달성
+                            {p2.contracts}건 달성
                           </div>
                         </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* 🥇 1위 (6칸 - 폭 2배 확장으로 줄바꿈 완전 방지) */}
-                  {monthlyPremiumTop3[0] && (
+                    {/* 🥇 1위 (6칸 - 폭 2배 확장으로 항상 중앙에서 웅장하게 표시) */}
                     <div className="md:col-span-6 flex flex-col items-center -translate-y-6 md:-translate-y-10">
                       <div className="relative mb-6">
                         <div className="absolute -top-14 left-1/2 -translate-x-1/2 animate-bounce">
                           <Crown size={58} className="text-amber-400 filter drop-shadow-[0_0_22px_rgba(251,191,36,1)]" />
                         </div>
-                        <ProfileAvatar photoUrl={monthlyPremiumTop3[0].photoUrl} name={monthlyPremiumTop3[0].name} rank={1} size="xl" />
+                        <ProfileAvatar photoUrl={p1.photoUrl} name={p1.name} rank={1} size="xl" />
                         <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-8 py-2 rounded-full bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black text-lg md:text-xl shadow-2xl shadow-amber-500/50 whitespace-nowrap border-2 border-white/50">
                           1st MVP
                         </div>
                       </div>
                       <div className="w-full bg-gradient-to-t from-amber-950/60 via-slate-900 to-slate-850 rounded-3xl p-8 md:p-12 lg:p-14 border-2 border-amber-400/90 text-center shadow-[0_0_55px_rgba(251,191,36,0.35)]">
-                        <div className="text-base md:text-xl text-amber-300 font-black uppercase tracking-wider">{monthlyPremiumTop3[0].dept}</div>
-                        <div className="text-4xl md:text-6xl lg:text-7xl font-black text-white mt-1.5">{monthlyPremiumTop3[0].name}</div>
+                        <div className="text-base md:text-xl text-amber-300 font-black uppercase tracking-wider">{p1.dept}</div>
+                        <div className="text-4xl md:text-6xl lg:text-7xl font-black text-white mt-1.5">{p1.name}</div>
                         <div className="mt-6 pt-6 border-t border-amber-500/40">
                           <div className="text-sm md:text-base text-amber-200/90 font-bold">당월 총 체결 보험료</div>
                           <div className="text-4xl md:text-6xl lg:text-7xl font-black bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 bg-clip-text text-transparent mt-1.5 whitespace-nowrap">
-                            ₩ {formatCurrency(monthlyPremiumTop3[0].premium)}
+                            ₩ {formatCurrency(p1.premium)}
                           </div>
                           <div className="inline-block mt-4 px-8 py-2.5 bg-amber-400/25 text-amber-300 rounded-full text-base md:text-lg font-black border border-amber-400/40">
-                            총 {monthlyPremiumTop3[0].contracts}건 체결 👑
+                            총 {p1.contracts}건 체결 👑
                           </div>
                         </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* 🥉 3위 (3칸) */}
-                  {monthlyPremiumTop3[2] && (
+                    {/* 🥉 3위 (3칸) */}
                     <div className="md:col-span-3 flex flex-col items-center">
                       <div className="relative mb-5">
-                        <ProfileAvatar photoUrl={monthlyPremiumTop3[2].photoUrl} name={monthlyPremiumTop3[2].name} rank={3} size="lg" />
+                        <ProfileAvatar photoUrl={p3.photoUrl} name={p3.name} rank={3} size="lg" />
                         <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-full bg-amber-800 text-white font-black text-sm md:text-base shadow-xl whitespace-nowrap">
                           3rd
                         </div>
                       </div>
                       <div className="w-full bg-gradient-to-t from-slate-900 via-slate-800/90 to-slate-800 rounded-3xl p-6 md:p-8 border border-slate-700 text-center shadow-2xl">
-                        <div className="text-base md:text-lg text-slate-400 font-bold truncate">{monthlyPremiumTop3[2].dept}</div>
-                        <div className="text-2xl md:text-4xl font-black text-white mt-1 truncate">{monthlyPremiumTop3[2].name}</div>
+                        <div className="text-base md:text-lg text-slate-400 font-bold truncate">{p3.dept}</div>
+                        <div className="text-2xl md:text-4xl font-black text-white mt-1 truncate">{p3.name}</div>
                         <div className="mt-4 pt-4 border-t border-slate-700/80">
                           <div className="text-xs md:text-sm text-slate-400 font-medium">당월 체결 보험료</div>
                           <div className="text-2xl md:text-3xl lg:text-4xl font-black text-amber-400 mt-1 whitespace-nowrap">
-                            ₩ {formatCurrency(monthlyPremiumTop3[2].premium)}
+                            ₩ {formatCurrency(p3.premium)}
                           </div>
                           <div className="inline-block mt-2.5 px-4 py-1 bg-slate-700/60 text-slate-300 rounded-full text-xs md:text-sm font-bold">
-                            {monthlyPremiumTop3[2].contracts}건 달성
+                            {p3.contracts}건 달성
                           </div>
                         </div>
                       </div>
                     </div>
-                  )}
 
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                SLIDE 2: 이번달 실적 현황 2 (타이틀 상단 & 1등 포디움 폭 대폭 확장)
+                SLIDE 2: 이번달 실적 현황 2 (항상 1, 2, 3등 포디움 유지 & 1등 폭 확장)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            {currentSlide === 2 && (
-              <div className="w-full max-w-[1750px] h-full flex flex-col justify-between items-center py-2 px-4 animate-in fade-in zoom-in-95 duration-500">
-                {/* 상단 타이틀 */}
-                <div className="text-center mt-1 mb-8 md:mb-12">
-                  <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-blue-500/10">
-                    <Sparkles size={20} /> MONTHLY CONTRACTS TOP 3
-                  </div>
-                  <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white drop-shadow-md">
-                    {selectedYear}년 {monthTitle} 다건 체결왕 TOP 3
-                  </h2>
-                  <p className="text-slate-300 text-base md:text-2xl mt-3 font-medium">
-                    많은 고객과의 신뢰를 쌓으며 최다 체결 계약을 이뤄낸 주인공들입니다.
-                  </p>
-                </div>
+            {currentSlide === 2 && (() => {
+              const c1 = monthlyContractsTop3[0] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
+              const c2 = monthlyContractsTop3[1] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
+              const c3 = monthlyContractsTop3[2] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
 
-                {/* 3단 포디움 (1등 카드 폭을 넓힌 12그리드 구조: 3 - 6 - 3) */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 items-end w-full max-w-[1700px] mb-2">
-                  
-                  {/* 🥈 2위 (3칸) */}
-                  {monthlyContractsTop3[1] && (
+              return (
+                <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
+                  {/* 상단 타이틀 */}
+                  <div className="text-center mt-1 mb-6 md:mb-8">
+                    <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-blue-500/10">
+                      <Sparkles size={20} /> MONTHLY CONTRACTS TOP 3
+                    </div>
+                    <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white drop-shadow-md">
+                      {selectedYear}년 {monthTitle} 다건 체결왕 TOP 3
+                    </h2>
+                    <p className="text-slate-300 text-base md:text-2xl mt-3 font-medium">
+                      많은 고객과의 신뢰를 쌓으며 최다 체결 계약을 이뤄낸 주인공들입니다.
+                    </p>
+                  </div>
+
+                  {/* 3단 포디움 (항상 2위-1위-3위 고정 렌더링) */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 items-end w-full max-w-[1700px] mt-2">
+                    
+                    {/* 🥈 2위 (3칸) */}
                     <div className="md:col-span-3 flex flex-col items-center">
                       <div className="relative mb-5">
-                        <ProfileAvatar photoUrl={monthlyContractsTop3[1].photoUrl} name={monthlyContractsTop3[1].name} rank={2} size="lg" />
+                        <ProfileAvatar photoUrl={c2.photoUrl} name={c2.name} rank={2} size="lg" />
                         <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-full bg-slate-300 text-slate-950 font-black text-sm md:text-base shadow-xl whitespace-nowrap">
                           2nd
                         </div>
                       </div>
                       <div className="w-full bg-gradient-to-t from-slate-900 via-slate-800/90 to-slate-800 rounded-3xl p-6 md:p-8 border border-slate-700 text-center shadow-2xl">
-                        <div className="text-base md:text-lg text-slate-400 font-bold truncate">{monthlyContractsTop3[1].dept}</div>
-                        <div className="text-2xl md:text-4xl font-black text-white mt-1 truncate">{monthlyContractsTop3[1].name}</div>
+                        <div className="text-base md:text-lg text-slate-400 font-bold truncate">{c2.dept}</div>
+                        <div className="text-2xl md:text-4xl font-black text-white mt-1 truncate">{c2.name}</div>
                         <div className="mt-4 pt-4 border-t border-slate-700/80">
                           <div className="text-xs md:text-sm text-slate-400 font-medium">당월 총 체결 건수</div>
                           <div className="text-3xl md:text-4xl font-black text-blue-300 mt-1 whitespace-nowrap">
-                            {monthlyContractsTop3[1].contracts} <span className="text-xl md:text-2xl font-bold text-slate-400">건</span>
+                            {c2.contracts} <span className="text-xl md:text-2xl font-bold text-slate-400">건</span>
                           </div>
                           <div className="inline-block mt-2.5 px-4 py-1 bg-slate-700/60 text-slate-300 rounded-full text-xs md:text-sm font-bold">
-                            ₩ {formatCurrency(monthlyContractsTop3[1].premium)}
+                            ₩ {formatCurrency(c2.premium)}
                           </div>
                         </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* 🥇 1위 (6칸 - 폭 2배 확장으로 줄바꿈 완전 방지) */}
-                  {monthlyContractsTop3[0] && (
+                    {/* 🥇 1위 (6칸 - 폭 2배 확장으로 항상 중앙에서 웅장하게 표시) */}
                     <div className="md:col-span-6 flex flex-col items-center -translate-y-6 md:-translate-y-10">
                       <div className="relative mb-6">
                         <div className="absolute -top-14 left-1/2 -translate-x-1/2 animate-bounce">
                           <Crown size={58} className="text-blue-400 filter drop-shadow-[0_0_22px_rgba(59,130,246,1)]" />
                         </div>
-                        <ProfileAvatar photoUrl={monthlyContractsTop3[0].photoUrl} name={monthlyContractsTop3[0].name} rank={1} size="xl" />
+                        <ProfileAvatar photoUrl={c1.photoUrl} name={c1.name} rank={1} size="xl" />
                         <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-8 py-2 rounded-full bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-500 text-white font-black text-lg md:text-xl shadow-2xl shadow-blue-500/50 whitespace-nowrap border-2 border-white/50">
                           1st 다건 체결왕
                         </div>
                       </div>
                       <div className="w-full bg-gradient-to-t from-blue-950/60 via-slate-900 to-slate-850 rounded-3xl p-8 md:p-12 lg:p-14 border-2 border-blue-400/90 text-center shadow-[0_0_55px_rgba(59,130,246,0.35)]">
-                        <div className="text-base md:text-xl text-blue-300 font-black uppercase tracking-wider">{monthlyContractsTop3[0].dept}</div>
-                        <div className="text-4xl md:text-6xl lg:text-7xl font-black text-white mt-1.5">{monthlyContractsTop3[0].name}</div>
+                        <div className="text-base md:text-xl text-blue-300 font-black uppercase tracking-wider">{c1.dept}</div>
+                        <div className="text-4xl md:text-6xl lg:text-7xl font-black text-white mt-1.5">{c1.name}</div>
                         <div className="mt-6 pt-6 border-t border-blue-500/40">
                           <div className="text-sm md:text-base text-blue-200/90 font-bold">당월 총 체결 건수</div>
                           <div className="text-4xl md:text-7xl lg:text-8xl font-black bg-gradient-to-r from-blue-200 via-indigo-200 to-white bg-clip-text text-transparent mt-1.5 whitespace-nowrap">
-                            {monthlyContractsTop3[0].contracts} <span className="text-3xl md:text-5xl font-bold text-blue-300">건</span>
+                            {c1.contracts} <span className="text-3xl md:text-5xl font-bold text-blue-300">건</span>
                           </div>
                           <div className="inline-block mt-4 px-8 py-2.5 bg-blue-400/25 text-blue-200 rounded-full text-base md:text-lg font-black border border-blue-400/40">
-                            체결 보험료 ₩ {formatCurrency(monthlyContractsTop3[0].premium)} 👑
+                            체결 보험료 ₩ {formatCurrency(c1.premium)} 👑
                           </div>
                         </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* 🥉 3위 (3칸) */}
-                  {monthlyContractsTop3[2] && (
+                    {/* 🥉 3위 (3칸) */}
                     <div className="md:col-span-3 flex flex-col items-center">
                       <div className="relative mb-5">
-                        <ProfileAvatar photoUrl={monthlyContractsTop3[2].photoUrl} name={monthlyContractsTop3[2].name} rank={3} size="lg" />
+                        <ProfileAvatar photoUrl={c3.photoUrl} name={c3.name} rank={3} size="lg" />
                         <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-full bg-indigo-800 text-white font-black text-sm md:text-base shadow-xl whitespace-nowrap">
                           3rd
                         </div>
                       </div>
                       <div className="w-full bg-gradient-to-t from-slate-900 via-slate-800/90 to-slate-800 rounded-3xl p-6 md:p-8 border border-slate-700 text-center shadow-2xl">
-                        <div className="text-base md:text-lg text-slate-400 font-bold truncate">{monthlyContractsTop3[2].dept}</div>
-                        <div className="text-2xl md:text-4xl font-black text-white mt-1 truncate">{monthlyContractsTop3[2].name}</div>
+                        <div className="text-base md:text-lg text-slate-400 font-bold truncate">{c3.dept}</div>
+                        <div className="text-2xl md:text-4xl font-black text-white mt-1 truncate">{c3.name}</div>
                         <div className="mt-4 pt-4 border-t border-slate-700/80">
                           <div className="text-xs md:text-sm text-slate-400 font-medium">당월 총 체결 건수</div>
                           <div className="text-3xl md:text-4xl font-black text-indigo-300 mt-1 whitespace-nowrap">
-                            {monthlyContractsTop3[2].contracts} <span className="text-xl md:text-2xl font-bold text-slate-400">건</span>
+                            {c3.contracts} <span className="text-xl md:text-2xl font-bold text-slate-400">건</span>
                           </div>
                           <div className="inline-block mt-2.5 px-4 py-1 bg-slate-700/60 text-slate-300 rounded-full text-xs md:text-sm font-bold">
-                            ₩ {formatCurrency(monthlyContractsTop3[2].premium)}
+                            ₩ {formatCurrency(c3.premium)}
                           </div>
                         </div>
                       </div>
                     </div>
-                  )}
 
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 SLIDE 3: 주간 실적 현황 1 (보험료 1~10등 자석 현황판)
@@ -1478,12 +1489,12 @@
             )}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                SLIDE 5: 투게더사업단 목표달성 현황 (타이틀 상단 & 간격 확장)
+                SLIDE 5: 투게더사업단 목표달성 현황 (높이 확장 및 웅장한 레이아웃)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {currentSlide === 5 && (
-              <div className="w-full max-w-[1750px] h-full flex flex-col justify-between items-center py-2 px-4 animate-in fade-in zoom-in-95 duration-500">
+              <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
                 {/* 상단 타이틀 */}
-                <div className="text-center mt-1 mb-6 md:mb-10">
+                <div className="text-center mt-1 mb-6 md:mb-8">
                   <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-blue-500/10">
                     <Target size={20} /> TOGETHER HEADQUARTERS MONTHLY GOAL
                   </div>
@@ -1495,11 +1506,12 @@
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12 w-full max-w-[1600px] items-center bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-8 md:p-12 lg:p-14 rounded-3xl border border-slate-800 shadow-2xl mb-2">
+                {/* 대형 카드 컨테이너 (높이 및 여백 대폭 확장) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12 w-full max-w-[1650px] items-stretch bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-8 md:p-12 lg:p-14 rounded-3xl border border-slate-800 shadow-2xl min-h-[560px] md:min-h-[600px] mt-2">
                   
-                  {/* 좌측: 투게더사업단 단체 사진 */}
-                  <div className="lg:col-span-6 flex flex-col items-center justify-center">
-                    <div className="relative w-full aspect-video rounded-3xl overflow-hidden border-2 border-blue-500/50 shadow-[0_0_40px_rgba(59,130,246,0.25)] bg-slate-950 flex items-center justify-center">
+                  {/* 좌측: 투게더사업단 단체 사진 (시원하고 큼직하게 확장) */}
+                  <div className="lg:col-span-6 flex flex-col items-center justify-center h-full">
+                    <div className="relative w-full h-full min-h-[380px] md:min-h-[480px] rounded-3xl overflow-hidden border-2 border-blue-500/50 shadow-[0_0_45px_rgba(59,130,246,0.3)] bg-slate-950 flex items-center justify-center">
                       {hqStats.hqPhotoUrl ? (
                         <img 
                           src={hqStats.hqPhotoUrl} 
@@ -1508,43 +1520,43 @@
                         />
                       ) : (
                         <div className="flex flex-col items-center justify-center text-slate-500 p-8 text-center">
-                          <Target size={80} className="text-blue-500/70 mb-4 animate-pulse" />
-                          <p className="text-2xl font-black text-slate-200">투게더사업단 단체 사진</p>
-                          <p className="text-sm text-slate-400 mt-2">구글 시트 '조직정보' 시트에 사업단 사진을 등록할 수 있습니다.</p>
+                          <Target size={90} className="text-blue-500/70 mb-5 animate-pulse" />
+                          <p className="text-3xl font-black text-slate-200">투게더사업단 단체 사진</p>
+                          <p className="text-base text-slate-400 mt-3">구글 시트 '조직정보' 시트에 사업단 사진을 등록할 수 있습니다.</p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* 우측: 월간 목표 vs 누적 실적 및 달성률 게이지 */}
-                  <div className="lg:col-span-6 flex flex-col justify-between space-y-6 md:space-y-8">
-                    <div className="bg-slate-950/90 p-8 rounded-3xl border border-slate-800 shadow-xl">
+                  {/* 우측: 월간 목표 vs 누적 실적 및 달성률 게이지 (높이 밸런스 매칭) */}
+                  <div className="lg:col-span-6 flex flex-col justify-between space-y-6 md:space-y-8 h-full py-2">
+                    <div className="bg-slate-950/90 p-8 md:p-10 rounded-3xl border border-slate-800 shadow-xl flex flex-col justify-between flex-1">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-black text-slate-400 uppercase">월간 목표 달성 현황</span>
-                        <span className="px-4 py-1.5 rounded-full bg-blue-500/25 text-blue-300 text-sm font-black shadow-md">
+                        <span className="text-base font-black text-slate-400 uppercase tracking-wide">월간 목표 달성 현황</span>
+                        <span className="px-5 py-2 rounded-full bg-blue-500/25 text-blue-300 text-base font-black shadow-md">
                           마감 D-{hqStats.dDay}
                         </span>
                       </div>
 
                       {/* 목표액 대비 누적 실적 표시 */}
-                      <div className="mt-3">
+                      <div className="my-4">
                         <div className="text-4xl md:text-6xl lg:text-7xl font-black bg-gradient-to-r from-blue-200 via-indigo-200 to-white bg-clip-text text-transparent">
                           ₩ {formatCurrency(hqStats.totalPremium)}
                         </div>
-                        <div className="text-sm md:text-base text-slate-400 font-bold mt-1.5">
+                        <div className="text-base md:text-lg text-slate-400 font-bold mt-2">
                           월간 목표: <strong className="text-slate-200">₩ {formatCurrency(hqStats.targetPremium)}</strong>
                         </div>
                       </div>
 
                       {/* 달성률 프로그레스 바 & 퍼센트 */}
-                      <div className="mt-6">
+                      <div className="mt-4">
                         <div className="flex justify-between items-end mb-2">
-                          <span className="text-sm font-bold text-slate-400">목표 달성률</span>
-                          <span className="text-3xl md:text-4xl font-black text-blue-400">{hqStats.achievementRate}%</span>
+                          <span className="text-base font-bold text-slate-400">목표 달성률</span>
+                          <span className="text-4xl md:text-5xl font-black text-blue-400">{hqStats.achievementRate}%</span>
                         </div>
-                        <div className="w-full h-5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                        <div className="w-full h-6 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
                           <div 
-                            className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-400 rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(59,130,246,0.6)]"
+                            className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-400 rounded-full transition-all duration-1000 shadow-[0_0_20px_rgba(59,130,246,0.7)]"
                             style={{ width: `${Math.min(100, hqStats.achievementRate)}%` }}
                           />
                         </div>
@@ -1552,16 +1564,16 @@
                     </div>
 
                     <div className="grid grid-cols-2 gap-5">
-                      <div className="bg-slate-950/90 p-6 rounded-2xl border border-slate-800">
-                        <div className="text-xs md:text-sm text-slate-400 font-bold">총 체결 계약 건수</div>
-                        <div className="text-3xl md:text-5xl font-black text-white mt-1.5">
-                          {hqStats.totalContracts} <span className="text-base font-bold text-slate-400">건</span>
+                      <div className="bg-slate-950/90 p-6 md:p-8 rounded-2xl border border-slate-800 shadow-lg">
+                        <div className="text-sm md:text-base text-slate-400 font-bold">총 체결 계약 건수</div>
+                        <div className="text-3xl md:text-5xl lg:text-6xl font-black text-white mt-2">
+                          {hqStats.totalContracts} <span className="text-lg font-bold text-slate-400">건</span>
                         </div>
                       </div>
-                      <div className="bg-slate-950/90 p-6 rounded-2xl border border-slate-800">
-                        <div className="text-xs md:text-sm text-slate-400 font-bold">보장/연금 실판매 참여 인원</div>
-                        <div className="text-3xl md:text-5xl font-black text-indigo-400 mt-1.5">
-                          {hqStats.activeMemberCount} <span className="text-base font-bold text-slate-400">/ {hqStats.totalMembers}명</span>
+                      <div className="bg-slate-950/90 p-6 md:p-8 rounded-2xl border border-slate-800 shadow-lg">
+                        <div className="text-sm md:text-base text-slate-400 font-bold">보장/연금 실판매 참여 인원</div>
+                        <div className="text-3xl md:text-5xl lg:text-6xl font-black text-indigo-400 mt-2">
+                          {hqStats.activeMemberCount} <span className="text-lg font-bold text-slate-400">/ {hqStats.totalMembers}명</span>
                         </div>
                       </div>
                     </div>
