@@ -969,6 +969,7 @@
       isOpen,
       onClose,
       monthlyDbData = [],
+      monthlyDbLoading = false,
       activityData = [],
       userInfoData = [],
       orgInfoData = [],
@@ -978,6 +979,13 @@
       onRefreshData
     }) => {
       if (!isOpen) return null;
+
+      // 모달이 처음 열릴 때 월실적 데이터가 아직 없으면 즉시 로드 트리거
+      useEffect(() => {
+        if (isOpen && (!monthlyDbData || monthlyDbData.length === 0) && onRefreshData) {
+          onRefreshData();
+        }
+      }, [isOpen]);
 
       // 활성화(Y)된 슬라이드만 순서대로 추출
       const activeSlides = useMemo(() => {
@@ -1032,14 +1040,27 @@
         return map;
       }, [userInfoData]);
 
-      // 시상 대상자 판별 함수 (이정호 단장은 시상/순위 대상에서 제외, 사업단 전체 통계에는 포함)
-      const isAwardEligible = (u) => {
+      // 시상 대상자 판별 함수 (이정호 단장 제외 + 대상월 기준 재직자만 + 투게더사업단 소속)
+      const isAwardEligible = (u, targetMonth = anchorMonth) => {
         if (!u) return false;
-        const name = String(u.name || u['이름'] || '').trim();
-        const role = String(u.user?.['직책'] || u.user?.['직급'] || u['직책'] || '').trim();
+        const userObj = u.user || u;
+        const name = String(u.name || userObj['이름'] || '').trim();
+        const role = String(userObj['직책'] || userObj['직급'] || '').trim();
         if (name.includes('이정호') || role.includes('단장')) {
           return false;
         }
+
+        // 대상월 기준 재직자(퇴사자 제외) 판별
+        if (targetMonth && !isUserActiveInMonth(userObj, targetMonth)) {
+          return false;
+        }
+
+        // 투게더사업단 소속 확인
+        const dept = String(u.dept || userObj['소속1'] || userObj['소속'] || '').trim();
+        if (dept && !dept.includes('투게더')) {
+          return false;
+        }
+
         return true;
       };
 
@@ -1079,38 +1100,40 @@
           });
         }
 
-        // 1. 보험료 순위 정렬
-        const listByPrem = Object.values(agg).filter(isAwardEligible).sort((a, b) => b.premium - a.premium);
+        // 1. 보험료 순위 정렬 (지난달 prevMonth 기준 재직자만)
+        const listByPrem = Object.values(agg).filter(u => isAwardEligible(u, prevMonth)).sort((a, b) => b.premium - a.premium);
         let premChamp = listByPrem[0];
 
-        // 2. 보험료 1등을 제외한 나머지 인원 중에서 건수 1등 선정 (중복 시상 방지)
-        const listByCont = Object.values(agg).filter(isAwardEligible).sort((a, b) => {
+        // 2. 보험료 1등을 제외한 나머지 인원 중에서 건수 1등 선정 (중복 시상 방지, 지난달 prevMonth 기준 재직자만)
+        const listByCont = Object.values(agg).filter(u => isAwardEligible(u, prevMonth)).sort((a, b) => {
           if (b.contracts !== a.contracts) return b.contracts - a.contracts;
           return b.premium - a.premium;
         });
         let contChamp = listByCont.find(u => u.sabun !== premChamp?.sabun) || listByCont[1];
 
-        // 데이터 없을 시 fallback
+        // 데이터 없을 시 fallback: 반드시 prevMonth 기준 재직자 중에서만 선별
         if (!premChamp && userInfoData.length > 0) {
-          const eligibleUsers = userInfoData.filter(isAwardEligible);
-          const u1 = eligibleUsers[0] || {};
-          premChamp = {
-            sabun: u1['사번'],
-            name: u1['이름'] || '김영업',
-            dept: u1['소속1'] || u1['소속'] || '투게더사업단',
-            photoUrl: getUserPhotoUrl(u1),
-            premium: 3450000,
-            contracts: 7
-          };
-          const u2 = eligibleUsers[1] || eligibleUsers[0] || {};
-          contChamp = {
-            sabun: u2['사번'],
-            name: u2['이름'] || '이체결',
-            dept: u2['소속1'] || u2['소속'] || '투게더사업단',
-            photoUrl: getUserPhotoUrl(u2),
-            premium: 2890000,
-            contracts: 9
-          };
+          const eligibleUsers = userInfoData.filter(u => isAwardEligible(u, prevMonth));
+          if (eligibleUsers.length > 0) {
+            const u1 = eligibleUsers[0];
+            premChamp = {
+              sabun: u1['사번'],
+              name: u1['이름'] || '-',
+              dept: u1['소속1'] || u1['소속'] || '투게더사업단',
+              photoUrl: getUserPhotoUrl(u1),
+              premium: 0,
+              contracts: 0
+            };
+            const u2 = eligibleUsers[1] || eligibleUsers[0];
+            contChamp = {
+              sabun: u2['사번'],
+              name: u2['이름'] || '-',
+              dept: u2['소속1'] || u2['소속'] || '투게더사업단',
+              photoUrl: getUserPhotoUrl(u2),
+              premium: 0,
+              contracts: 0
+            };
+          }
         }
 
         return { premChamp, contChamp };
@@ -1152,16 +1175,16 @@
           });
         }
 
-        let list = Object.values(agg).filter(isAwardEligible).sort((a, b) => b.premium - a.premium);
+        let list = Object.values(agg).filter(u => isAwardEligible(u, anchorMonth)).sort((a, b) => b.premium - a.premium);
         if (list.length === 0 && userInfoData.length > 0) {
-          const eligibleUsers = userInfoData.filter(isAwardEligible);
-          list = eligibleUsers.slice(0, 3).map((u, idx) => ({
+          const eligibleUsers = userInfoData.filter(u => isAwardEligible(u, anchorMonth));
+          list = eligibleUsers.slice(0, 3).map((u) => ({
             sabun: u['사번'],
             name: u['이름'],
             dept: u['소속1'] || u['소속'] || '투게더사업단',
             photoUrl: getUserPhotoUrl(u),
-            contracts: [6, 4, 3][idx] || 2,
-            premium: [2800000, 1950000, 1320000][idx] || 900000
+            contracts: 0,
+            premium: 0
           }));
         }
         return list.slice(0, 3);
@@ -1203,20 +1226,20 @@
           });
         }
 
-        let list = Object.values(agg).filter(isAwardEligible).sort((a, b) => {
+        let list = Object.values(agg).filter(u => isAwardEligible(u, anchorMonth)).sort((a, b) => {
           if (b.contracts !== a.contracts) return b.contracts - a.contracts;
           return b.premium - a.premium;
         });
 
         if (list.length === 0 && userInfoData.length > 0) {
-          const eligibleUsers = userInfoData.filter(isAwardEligible);
-          list = eligibleUsers.slice(0, 3).map((u, idx) => ({
+          const eligibleUsers = userInfoData.filter(u => isAwardEligible(u, anchorMonth));
+          list = eligibleUsers.slice(0, 3).map((u) => ({
             sabun: u['사번'],
             name: u['이름'],
             dept: u['소속1'] || u['소속'] || '투게더사업단',
             photoUrl: getUserPhotoUrl(u),
-            contracts: [8, 6, 5][idx] || 3,
-            premium: [2100000, 2450000, 1800000][idx] || 900000
+            contracts: 0,
+            premium: 0
           }));
         }
         return list.slice(0, 3);
@@ -1257,29 +1280,27 @@
           weekMap[sabun].activityTotal += actTotal;
         });
 
-        let listPrem = Object.values(weekMap).filter(isAwardEligible).sort((a, b) => {
+        let listPrem = Object.values(weekMap).filter(u => isAwardEligible(u, anchorMonth)).sort((a, b) => {
           if (b.premium !== a.premium) return b.premium - a.premium;
           return b.contracts - a.contracts;
         });
 
-        let listCont = Object.values(weekMap).filter(isAwardEligible).sort((a, b) => {
+        let listCont = Object.values(weekMap).filter(u => isAwardEligible(u, anchorMonth)).sort((a, b) => {
           if (b.contracts !== a.contracts) return b.contracts - a.contracts;
           return b.premium - a.premium;
         });
 
         if (listPrem.length === 0 && userInfoData.length > 0) {
-          const samplePrem = [2800000, 2100000, 1650000, 1300000, 1000000, 850000, 600000, 450000, 300000, 150000];
-          const sampleCont = [7, 6, 5, 4, 3, 3, 2, 2, 1, 1];
-          const eligibleUsers = userInfoData.filter(isAwardEligible);
-          listPrem = eligibleUsers.slice(0, 10).map((u, idx) => ({
+          const eligibleUsers = userInfoData.filter(u => isAwardEligible(u, anchorMonth));
+          listPrem = eligibleUsers.slice(0, 10).map((u) => ({
             sabun: u['사번'],
             name: u['이름'],
             dept: u['소속1'] || u['소속'] || '투게더사업단',
             photoUrl: getUserPhotoUrl(u),
-            premium: samplePrem[idx] || 100000,
-            contracts: sampleCont[idx] || 1
+            premium: 0,
+            contracts: 0
           }));
-          listCont = [...listPrem].sort((a, b) => b.contracts - a.contracts || b.premium - a.premium);
+          listCont = [...listPrem];
         }
 
         return {
@@ -1420,6 +1441,8 @@
       // 슬라이드쇼 타이머 (설정된 개별 지속시간 초 단위 적용)
       useEffect(() => {
         if (!isPlaying || activeSlides.length === 0) return;
+        // 월실적 데이터가 아직 로드되지 않았으면 데이터가 도착할 때까지 타이머 대기
+        if (!monthlyDbData || monthlyDbData.length === 0) return;
 
         const currentDuration = Math.max(3000, (activeSlides[currentSlideIndex]?.['지속시간'] || 10) * 1000);
 
@@ -1440,7 +1463,7 @@
         }, PROGRESS_INTERVAL);
 
         return () => clearInterval(interval);
-      }, [isPlaying, currentSlideIndex, activeSlides, onRefreshData]);
+      }, [isPlaying, currentSlideIndex, activeSlides, onRefreshData, monthlyDbData]);
 
       const handleSelectSlide = (idx) => {
         setCurrentSlideIndex(idx);
@@ -1559,10 +1582,21 @@
             <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none" />
 
+            {/* 데이터 로딩 인디케이터 (초기 데이터 준비 전 가짜/퇴사자 데이터 노출 차단) */}
+            {(!monthlyDbData || monthlyDbData.length === 0) && (
+              <div className="flex flex-col items-center justify-center p-12 text-center animate-in fade-in duration-300 z-30">
+                <div className="w-20 h-20 rounded-3xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mb-6 shadow-2xl shadow-amber-500/30">
+                  <RefreshCw size={36} className="text-amber-400 animate-spin" />
+                </div>
+                <h3 className="text-3xl md:text-4xl font-black text-white">명예의 전당 실적 데이터를 집계 중입니다...</h3>
+                <p className="text-base md:text-lg text-slate-400 mt-3 font-medium">최신 월간 및 주간 실적을 구글 시트에서 안전하게 불러오고 있습니다.</p>
+              </div>
+            )}
+
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 SLIDE 0: 지난달 실적 챔피언 (타이틀 유지 & 본문 황금비율 위치)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            {currentSlideItem?.id === 'last_month_champion' && (
+            {monthlyDbData && monthlyDbData.length > 0 && currentSlideItem?.id === 'last_month_champion' && (
               <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
                 {/* 상단 타이틀 */}
                 <div className="text-center mt-1 mb-10 md:mb-12">
@@ -1577,8 +1611,8 @@
                   </p>
                 </div>
 
-                {/* 2대 챔피언 대형 듀얼 카드 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-14 w-full max-w-[1600px] mt-4">
+                {/* 2대 챔피언 대형 듀얼 카드 (본문 약간 아래로 조정: mt-8 md:mt-12) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-14 w-full max-w-[1600px] mt-8 md:mt-12">
                   
                   {/* 🏆 지난달 월 보험료 1등 */}
                   {(() => {
@@ -1645,7 +1679,7 @@
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 SLIDE 1: 이번달 실적 현황 1 (균형잡힌 4-4-4 포디움 & 황금비율 위치)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            {currentSlideItem?.id === 'monthly_premium_top3' && (() => {
+            {monthlyDbData && monthlyDbData.length > 0 && currentSlideItem?.id === 'monthly_premium_top3' && (() => {
               const p1 = monthlyPremiumTop3[0] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
               const p2 = monthlyPremiumTop3[1] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
               const p3 = monthlyPremiumTop3[2] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
@@ -1665,8 +1699,8 @@
                     </p>
                   </div>
 
-                  {/* 3단 포디움 (4-4-4 균형 구조: 2등과 3등도 넉넉하고 웅장한 가로폭) */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-end w-full max-w-[1700px] mt-4">
+                  {/* 3단 포디움 (4-4-4 균형 구조: 본문 약간 아래로 조정: mt-8 md:mt-12) */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-end w-full max-w-[1700px] mt-8 md:mt-12">
                     
                     {/* 🥈 2위 (4칸 - 넉넉하고 웅장한 폭) */}
                     <div className="md:col-span-4 flex flex-col items-center">
@@ -1748,7 +1782,7 @@
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 SLIDE 2: 이번달 실적 현황 2 (균형잡힌 4-4-4 포디움 & 황금비율 위치)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            {currentSlideItem?.id === 'monthly_contracts_top3' && (() => {
+            {monthlyDbData && monthlyDbData.length > 0 && currentSlideItem?.id === 'monthly_contracts_top3' && (() => {
               const c1 = monthlyContractsTop3[0] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
               const c2 = monthlyContractsTop3[1] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
               const c3 = monthlyContractsTop3[2] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
@@ -1768,8 +1802,8 @@
                     </p>
                   </div>
 
-                  {/* 3단 포디움 (4-4-4 균형 구조: 2등과 3등도 넉넉하고 웅장한 가로폭) */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-end w-full max-w-[1700px] mt-4">
+                  {/* 3단 포디움 (4-4-4 균형 구조: 본문 약간 아래로 조정: mt-8 md:mt-12) */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-end w-full max-w-[1700px] mt-8 md:mt-12">
                     
                     {/* 🥈 2위 (4칸 - 넉넉하고 웅장한 폭) */}
                     <div className="md:col-span-4 flex flex-col items-center">
@@ -1879,7 +1913,7 @@
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 SLIDE 5: 투게더사업단 목표달성 현황 (높이 확장 및 황금비율 위치)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            {currentSlideItem?.id === 'hq_monthly_goal' && (
+            {monthlyDbData && monthlyDbData.length > 0 && currentSlideItem?.id === 'hq_monthly_goal' && (
               <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
                 {/* 상단 타이틀 */}
                 <div className="text-center mt-1 mb-8 md:mb-10">
@@ -1894,8 +1928,8 @@
                   </p>
                 </div>
 
-                {/* 대형 카드 컨테이너 (높이 및 여백 대폭 확장) */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12 w-full max-w-[1650px] items-stretch bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-8 md:p-12 lg:p-14 rounded-3xl border border-slate-800 shadow-2xl min-h-[560px] md:min-h-[600px] mt-4">
+                {/* 대형 카드 컨테이너 (본문 약간 아래로 조정: mt-8 md:mt-12) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12 w-full max-w-[1650px] items-stretch bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-8 md:p-12 lg:p-14 rounded-3xl border border-slate-800 shadow-2xl min-h-[560px] md:min-h-[600px] mt-8 md:mt-12">
                   
                   {/* 좌측: 투게더사업단 단체 사진 (시원하고 큼직하게 확장) */}
                   <div className="lg:col-span-6 flex flex-col items-center justify-center h-full">
@@ -3908,6 +3942,7 @@
               isOpen={showHallOfFame}
               onClose={() => setShowHallOfFame(false)}
               monthlyDbData={monthlyDbData}
+              monthlyDbLoading={monthlyDbLoading}
               activityData={data}
               userInfoData={userInfoData}
               orgInfoData={orgInfoData}
