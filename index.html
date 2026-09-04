@@ -134,6 +134,7 @@
       if (!s) return '';
       if (s.startsWith('data:image') || s.startsWith('blob:')) return s;
 
+      // 구글 드라이브 파일 ID 추출 (다양한 공유 링크 패턴 지원)
       let fileId = null;
       const match1 = s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
       const match2 = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
@@ -151,6 +152,13 @@
         // 구글 드라이브 공개 이미지 웹 서빙 시 403 차단이 가장 적고 빠른 고화질 썸네일 API
         return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
       }
+
+      // 만약 웹 URL(http:// 또는 https://)이 아닌 단순 파일명(예: '이주성.jpeg')인 경우
+      // 웹서버에 해당 파일이 없어 404 Not Found 에러가 발생하는 것을 방지하기 위해 무효 처리
+      if (!s.startsWith('http://') && !s.startsWith('https://')) {
+        return '';
+      }
+
       return s;
     }
 
