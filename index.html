@@ -17,6 +17,49 @@
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
+
+    /* 명예의 전당 슬라이드 부드러운 전환 효과 (페이드인 + 미세 줌인) */
+    @keyframes slideSlowFadeIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.985);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    .animate-slide-fade {
+      animation: slideSlowFadeIn 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    /* 슬라이드 1 챔피언 별빛 펄스 & 회전 애니메이션 */
+    @keyframes sparkleFloatLeft {
+      0%, 100% {
+        transform: translate(0, 0) scale(1) rotate(0deg);
+        opacity: 0.85;
+      }
+      50% {
+        transform: translate(-4px, -6px) scale(1.18) rotate(-15deg);
+        opacity: 1;
+      }
+    }
+    @keyframes sparkleFloatRight {
+      0%, 100% {
+        transform: translate(0, 0) scale(1) rotate(0deg);
+        opacity: 0.85;
+      }
+      50% {
+        transform: translate(4px, -6px) scale(1.18) rotate(15deg);
+        opacity: 1;
+      }
+    }
+    .animate-sparkle-left {
+      animation: sparkleFloatLeft 2.2s ease-in-out infinite;
+    }
+    .animate-sparkle-right {
+      animation: sparkleFloatRight 2.2s ease-in-out infinite 0.6s;
+    }
   </style>
 </head>
 <body class="bg-[#FFF9F5] antialiased">
@@ -986,7 +1029,7 @@
       };
 
       return (
-        <div className="w-full max-w-[1950px] h-full flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-500 px-1 py-1">
+        <div className="w-full max-w-[1950px] h-full flex flex-col items-center justify-center animate-slide-fade px-1 py-1">
           <div className="w-full h-full bg-[#FAFCFF] rounded-3xl border-[14px] border-[#D4AF37] shadow-[0_25px_70px_rgba(0,0,0,0.7)] p-4 md:p-6 lg:p-7 flex flex-col justify-between relative overflow-hidden text-slate-900 select-none">
             <div className="flex items-center justify-between border-b-2 border-slate-300 pb-2.5 mb-2.5">
               <div className="flex items-center gap-4">
@@ -1891,7 +1934,10 @@
                 SLIDE 0: 지난달 실적 챔피언 (타이틀 유지 & 본문 황금비율 위치)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {((monthlyDbData && monthlyDbData.length > 0) || (monthlyMvpData && monthlyMvpData.length > 0)) && currentSlideItem?.id === 'last_month_champion' && (
-              <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
+              <div 
+                key={`slide_${currentSlideIndex}_${currentSlideItem?.id}`}
+                className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-slide-fade"
+              >
                 {/* 상단 타이틀 */}
                 <div className="text-center mt-1 mb-10 md:mb-12">
                   <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-amber-500/10">
@@ -1918,10 +1964,15 @@
                         </div>
 
                         <div className="relative my-8">
-                          {/* 🌟 챔피언 상단 바운스 황금 왕관 및 네온 글로우 */}
-                          <div className="absolute -top-14 left-1/2 -translate-x-1/2 animate-bounce z-20">
-                            <Crown size={60} className="text-amber-400 filter drop-shadow-[0_0_24px_rgba(251,191,36,1)]" />
+                          {/* 🌟 [B안] 바운스 황금 왕관 + 양옆 은은한 별빛 스파클 궤도 회전 */}
+                          <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center justify-center z-20 pointer-events-none">
+                            <Sparkles size={24} className="text-amber-300 absolute -left-7 -top-1 animate-sparkle-left filter drop-shadow-[0_0_12px_rgba(251,191,36,0.9)]" />
+                            <div className="animate-bounce">
+                              <Crown size={62} className="text-amber-400 filter drop-shadow-[0_0_26px_rgba(251,191,36,1)]" />
+                            </div>
+                            <Sparkles size={22} className="text-yellow-200 absolute -right-7 -top-2 animate-sparkle-right filter drop-shadow-[0_0_12px_rgba(251,191,36,0.9)]" />
                           </div>
+
                           <ProfileAvatar photoUrl={champ.photoUrl} name={champ.name} rank={1} size="xl" />
                           <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-7 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-base md:text-lg shadow-xl whitespace-nowrap border-2 border-white/40">
                             CHAMPION
@@ -1954,10 +2005,15 @@
                         </div>
 
                         <div className="relative my-8">
-                          {/* 🌟 챔피언 상단 바운스 사파이어 블루 다이아몬드/별빛 및 네온 글로우 */}
-                          <div className="absolute -top-14 left-1/2 -translate-x-1/2 animate-bounce z-20">
-                            <Sparkles size={58} className="text-cyan-400 filter drop-shadow-[0_0_24px_rgba(6,182,212,1)]" />
+                          {/* 🌟 [B안] 바운스 블루 왕관 + 양옆 은은한 사파이어 별빛 스파클 궤도 회전 */}
+                          <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center justify-center z-20 pointer-events-none">
+                            <Sparkles size={24} className="text-cyan-300 absolute -left-7 -top-1 animate-sparkle-left filter drop-shadow-[0_0_12px_rgba(6,182,212,0.9)]" />
+                            <div className="animate-bounce">
+                              <Crown size={62} className="text-cyan-400 filter drop-shadow-[0_0_26px_rgba(6,182,212,1)]" />
+                            </div>
+                            <Sparkles size={22} className="text-sky-200 absolute -right-7 -top-2 animate-sparkle-right filter drop-shadow-[0_0_12px_rgba(6,182,212,0.9)]" />
                           </div>
+
                           <ProfileAvatar photoUrl={champ.photoUrl} name={champ.name} rank={2} size="xl" />
                           <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-7 py-1.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-black text-base md:text-lg shadow-xl whitespace-nowrap border-2 border-white/40">
                             CONTRACT KING
@@ -1993,7 +2049,10 @@
               const p3 = monthlyPremiumTop3[2] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
 
               return (
-                <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
+                <div 
+                  key={`slide_${currentSlideIndex}_${currentSlideItem?.id}`}
+                  className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-slide-fade"
+                >
                   {/* 상단 타이틀 */}
                   <div className="text-center mt-1 mb-10 md:mb-12">
                     <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-amber-500/10">
@@ -2096,7 +2155,10 @@
               const c3 = monthlyContractsTop3[2] || { name: '-', dept: '투게더사업단', premium: 0, contracts: 0, photoUrl: '' };
 
               return (
-                <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
+                <div 
+                  key={`slide_${currentSlideIndex}_${currentSlideItem?.id}`}
+                  className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-slide-fade"
+                >
                   {/* 상단 타이틀 */}
                   <div className="text-center mt-1 mb-10 md:mb-12">
                     <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-blue-500/20 border border-blue-400/50 text-cyan-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-blue-500/20">
@@ -2194,35 +2256,48 @@
                 SLIDE 3: 주간 실적 현황 1 (보험료 1~10등 자석 현황판)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {currentSlideItem?.id === 'weekly_premium_top10' && (
-              <MagneticWhiteboard 
-                title="주간 보험료 실적 현황판 (1위~10위)"
-                subTitle="이번 주 실시간 체결 보험료 기준 자석 그래프 현황판입니다."
-                type="premium"
-                data={weeklyPremiumTop10}
-                selectedYear={selectedYear}
-                selectedWeek={selectedWeek}
-              />
+              <div 
+                key={`slide_${currentSlideIndex}_${currentSlideItem?.id}`}
+                className="w-full h-full flex items-center justify-center animate-slide-fade"
+              >
+                <MagneticWhiteboard 
+                  title="주간 보험료 실적 현황판 (1위~10위)"
+                  subTitle="이번 주 실시간 체결 보험료 기준 자석 그래프 현황판입니다."
+                  type="premium"
+                  data={weeklyPremiumTop10}
+                  selectedYear={selectedYear}
+                  selectedWeek={selectedWeek}
+                />
+              </div>
             )}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 SLIDE 4: 주간 실적 현황 2 (건수 1~10등 자석 현황판)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {currentSlideItem?.id === 'weekly_contracts_top10' && (
-              <MagneticWhiteboard 
-                title="주간 체결 건수 현황판 (1위~10위)"
-                subTitle="이번 주 실시간 체결 건수 기준 자석 그래프 현황판입니다."
-                type="contracts"
-                data={weeklyContractsTop10}
-                selectedYear={selectedYear}
-                selectedWeek={selectedWeek}
-              />
+              <div 
+                key={`slide_${currentSlideIndex}_${currentSlideItem?.id}`}
+                className="w-full h-full flex items-center justify-center animate-slide-fade"
+              >
+                <MagneticWhiteboard 
+                  title="주간 체결 건수 현황판 (1위~10위)"
+                  subTitle="이번 주 실시간 체결 건수 기준 자석 그래프 현황판입니다."
+                  type="contracts"
+                  data={weeklyContractsTop10}
+                  selectedYear={selectedYear}
+                  selectedWeek={selectedWeek}
+                />
+              </div>
             )}
 
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 SLIDE 5: 투게더사업단 목표달성 현황 (높이 확장 및 황금비율 위치)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {monthlyDbData && monthlyDbData.length > 0 && currentSlideItem?.id === 'hq_monthly_goal' && (
-              <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
+              <div 
+                key={`slide_${currentSlideIndex}_${currentSlideItem?.id}`}
+                className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-slide-fade"
+              >
                 {/* 상단 타이틀 */}
                 <div className="text-center mt-1 mb-8 md:mb-10">
                   <div className="inline-flex items-center gap-2.5 px-6 py-2 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-300 text-base md:text-lg font-black mb-3 shadow-lg shadow-blue-500/10">
@@ -2324,7 +2399,10 @@
               const slideDesc = currentSlideItem['슬라이드설명'] || '';
 
               return (
-                <div className="w-full h-full flex flex-col items-center justify-center relative p-2 md:p-4 animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
+                <div 
+                  key={`slide_${currentSlideIndex}_${currentSlideItem?.id}`}
+                  className="w-full h-full flex flex-col items-center justify-center relative p-2 md:p-4 animate-slide-fade overflow-hidden"
+                >
                   {directImg ? (
                     <div className="relative w-full h-full flex items-center justify-center rounded-3xl overflow-hidden shadow-2xl border border-slate-800/80 bg-black/50">
                       {/* 이미지 전체화면 출력 (contain 비율 유지) */}
