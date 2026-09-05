@@ -1115,6 +1115,8 @@
       userInfoData = [],
       orgInfoData = [],
       dashboardConfigs = [],
+      monthlyMvpData = [],
+      onSaveMonthlyMvp,
       selectedYear,
       selectedWeek,
       onRefreshData
@@ -1141,6 +1143,7 @@
       const [isFullscreen, setIsFullscreen] = useState(false);
 
       const PROGRESS_INTERVAL = 100; // 100ms마다 업데이트
+      const savedMvpMonthsRef = useRef(new Set()); // 중복 저장 방지용 Set
 
       // 현재 활성 슬라이드 안전 참조
       const safeIndex = currentSlideIndex < activeSlides.length ? currentSlideIndex : 0;
@@ -1205,9 +1208,51 @@
         return true;
       };
 
-      // SLIDE 0: 지난달 실적 챔피언 (월 보험료 1등 & 월 건수 1등 - 중복 시상 없음)
+      // SLIDE 0: 지난달 실적 챔피언 (활동_DB '월간MVP' 시트 우선 조회, 없으면 집계 후 자동 저장)
       const lastMonthChampions = useMemo(() => {
         const parseNum = (val) => Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
+
+        // 1. 월간MVP 시트에 현재 전월(prevMonth) 기록이 있는지 우선 확인
+        const targetMvpRows = (monthlyMvpData || []).filter(r => normalizeMonth(r['마감월']) === prevMonth);
+        const savedPremRow = targetMvpRows.find(r => String(r['시상내용'] || '').trim() === '보험료1등');
+        const savedContRow = targetMvpRows.find(r => String(r['시상내용'] || '').trim() === '건수1등');
+
+        if (savedPremRow && savedContRow) {
+          // 월간MVP 시트에 저장된 기록이 있으면 바로 불러와서 표시
+          const findUserByName = (targetName) => {
+            if (!targetName) return null;
+            const cleanTarget = targetName.replace(/파트너.*$/, '').trim();
+            return userInfoData.find(u => {
+              const uName = String(u['이름'] || '').trim();
+              return uName === targetName || uName === cleanTarget;
+            });
+          };
+
+          const uPrem = findUserByName(savedPremRow['수상자이름']);
+          const uCont = findUserByName(savedContRow['수상자이름']);
+
+          const premChamp = {
+            name: savedPremRow['수상자이름'],
+            dept: uPrem ? (uPrem['소속1'] || uPrem['소속'] || '투게더사업단') : '투게더사업단',
+            premium: parseNum(savedPremRow['보험료']),
+            contracts: parseNum(savedPremRow['건수']),
+            photoUrl: uPrem ? getUserPhotoUrl(uPrem) : '',
+            fromSheet: true
+          };
+
+          const contChamp = {
+            name: savedContRow['수상자이름'],
+            dept: uCont ? (uCont['소속1'] || uCont['소속'] || '투게더사업단') : '투게더사업단',
+            premium: parseNum(savedContRow['보험료']),
+            contracts: parseNum(savedContRow['건수']),
+            photoUrl: uCont ? getUserPhotoUrl(uCont) : '',
+            fromSheet: true
+          };
+
+          return { premChamp, contChamp, isFromSheet: true, shouldSave: false };
+        }
+
+        // 2. 월간MVP 시트에 기록이 없으면 월실적_DB에서 집계
         const agg = {};
 
         if (monthlyDbData && monthlyDbData.length > 0) {
@@ -1241,16 +1286,22 @@
           });
         }
 
-        // 1. 보험료 순위 정렬 (지난달 prevMonth 기준 재직자만)
+        // 1) 보험료 순위 정렬 (지난달 prevMonth 기준 재직자만)
         const listByPrem = Object.values(agg).filter(u => isAwardEligible(u, prevMonth)).sort((a, b) => b.premium - a.premium);
         let premChamp = listByPrem[0];
 
-        // 2. 보험료 1등을 제외한 나머지 인원 중에서 건수 1등 선정 (중복 시상 방지, 지난달 prevMonth 기준 재직자만)
+        // 2) 보험료 1등을 제외한 나머지 인원 중에서 건수 1등 선정 (중복 시상 방지, 지난달 prevMonth 기준 재직자만)
         const listByCont = Object.values(agg).filter(u => isAwardEligible(u, prevMonth)).sort((a, b) => {
           if (b.contracts !== a.contracts) return b.contracts - a.contracts;
           return b.premium - a.premium;
         });
         let contChamp = listByCont.find(u => u.sabun !== premChamp?.sabun) || listByCont[1];
+
+        // 유효 실적 데이터 존재 여부
+        let hasRealData = false;
+        if (premChamp && contChamp && (premChamp.premium > 0 || premChamp.contracts > 0 || contChamp.contracts > 0)) {
+          hasRealData = true;
+        }
 
         // 데이터 없을 시 fallback: 반드시 prevMonth 기준 재직자 중에서만 선별
         if (!premChamp && userInfoData.length > 0) {
@@ -1277,8 +1328,41 @@
           }
         }
 
-        return { premChamp, contChamp };
-      }, [monthlyDbData, togetherUserMap, userInfoData, prevMonth]);
+        return { 
+          premChamp, 
+          contChamp, 
+          isFromSheet: false, 
+          shouldSave: hasRealData && monthlyDbData.length > 0 
+        };
+      }, [monthlyMvpData, monthlyDbData, togetherUserMap, userInfoData, prevMonth]);
+
+      // 월간MVP 시트에 전월 기록이 없는 경우 집계 결과 1회 자동 저장
+      useEffect(() => {
+        if (!lastMonthChampions.shouldSave || lastMonthChampions.isFromSheet) return;
+        if (!onSaveMonthlyMvp || !prevMonth) return;
+        if (savedMvpMonthsRef.current.has(prevMonth)) return;
+
+        const { premChamp, contChamp } = lastMonthChampions;
+        if (premChamp && contChamp && premChamp.name && contChamp.name && premChamp.name !== '-') {
+          savedMvpMonthsRef.current.add(prevMonth);
+          onSaveMonthlyMvp([
+            {
+              '마감월': prevMonth,
+              '시상내용': '보험료1등',
+              '수상자이름': premChamp.name,
+              '보험료': premChamp.premium || 0,
+              '건수': premChamp.contracts || 0
+            },
+            {
+              '마감월': prevMonth,
+              '시상내용': '건수1등',
+              '수상자이름': contChamp.name,
+              '보험료': contChamp.premium || 0,
+              '건수': contChamp.contracts || 0
+            }
+          ]);
+        }
+      }, [lastMonthChampions, prevMonth, onSaveMonthlyMvp]);
 
       // SLIDE 1: 이번달 실적 현황 1 (보험료 1, 2, 3등)
       const monthlyPremiumTop3 = useMemo(() => {
@@ -1580,6 +1664,10 @@
         });
       }, [activeSlides]);
 
+      // 구글 시트 연동 주기: 10분 (600,000ms)
+      const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+      const lastRefreshTimeRef = useRef(Date.now());
+
       // 슬라이드쇼 타이머 (설정된 개별 지속시간 초 단위 적용)
       useEffect(() => {
         if (!isPlaying || activeSlides.length === 0) return;
@@ -1593,8 +1681,13 @@
             if (prev >= 100) {
               setCurrentSlideIndex(curr => {
                 const next = (curr + 1) % activeSlides.length;
+                // 슬라이드가 한 바퀴 돌았을 때(next === 0), 마지막 연동 후 10분이 지났으면 연동 실행
                 if (next === 0 && onRefreshData) {
-                  onRefreshData();
+                  const now = Date.now();
+                  if (now - lastRefreshTimeRef.current >= REFRESH_INTERVAL_MS) {
+                    lastRefreshTimeRef.current = now;
+                    onRefreshData();
+                  }
                 }
                 return next;
               });
@@ -1606,6 +1699,19 @@
 
         return () => clearInterval(interval);
       }, [isPlaying, currentSlideIndex, activeSlides, onRefreshData, monthlyDbData]);
+
+      // 모달이 열려있는 동안 백그라운드 10분 주기 체크
+      useEffect(() => {
+        if (!isOpen || !onRefreshData) return;
+        const checkTimer = setInterval(() => {
+          const now = Date.now();
+          if (now - lastRefreshTimeRef.current >= REFRESH_INTERVAL_MS) {
+            lastRefreshTimeRef.current = now;
+            onRefreshData();
+          }
+        }, 60 * 1000); // 1분마다 경과 시간 점검
+        return () => clearInterval(checkTimer);
+      }, [isOpen, onRefreshData]);
 
       const handleSelectSlide = (idx) => {
         setCurrentSlideIndex(idx);
@@ -1738,7 +1844,7 @@
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 SLIDE 0: 지난달 실적 챔피언 (타이틀 유지 & 본문 황금비율 위치)
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-            {monthlyDbData && monthlyDbData.length > 0 && currentSlideItem?.id === 'last_month_champion' && (
+            {((monthlyDbData && monthlyDbData.length > 0) || (monthlyMvpData && monthlyMvpData.length > 0)) && currentSlideItem?.id === 'last_month_champion' && (
               <div className="w-full max-w-[1750px] h-full flex flex-col justify-start items-center pt-2 pb-4 px-4 animate-in fade-in zoom-in-95 duration-500">
                 {/* 상단 타이틀 */}
                 <div className="text-center mt-1 mb-10 md:mb-12">
@@ -2287,6 +2393,9 @@
       const [showDashboardConfigModal, setShowDashboardConfigModal] = useState(false);
       const [isSavingConfig, setIsSavingConfig] = useState(false);
 
+      // [신규] 월간MVP(전월 챔피언 시트 데이터) 상태
+      const [monthlyMvpData, setMonthlyMvpData] = useState([]);
+
       // 명예의 전당 (슬라이드쇼 전광판) 모달 상태
       const [showHallOfFame, setShowHallOfFame] = useState(false);
 
@@ -2455,6 +2564,90 @@
       };
 
       // ─────────────────────────────────────────────────────
+      //  월간MVP 시트 로드 (GAS ?type=monthly_mvp)
+      // ─────────────────────────────────────────────────────
+      const fetchMonthlyMvp = async () => {
+        if (!GAS_CONFIGURED) return;
+        try {
+          const raw = await fetchFromGas('monthly_mvp');
+          if (raw && Array.isArray(raw)) {
+            setMonthlyMvpData(raw.map(normalizeGasRow));
+          }
+        } catch (err) {
+          console.warn('월간MVP 데이터 로드 스킵 또는 미설정:', err.message);
+        }
+      };
+
+      // ─────────────────────────────────────────────────────
+      //  월간MVP 시트에 전월 챔피언 기록 저장
+      // ─────────────────────────────────────────────────────
+      const saveMonthlyMvpToGas = async (mvpRows) => {
+        if (!GAS_CONFIGURED || !mvpRows || mvpRows.length === 0) return;
+        try {
+          // 1. POST 방식 시도
+          try {
+            const res = await fetch(GAS_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ action: 'save_monthly_mvp', data: mvpRows }),
+              redirect: 'follow'
+            });
+            if (res.ok) {
+              const json = await res.json();
+              if (json.status === 'success') {
+                setMonthlyMvpData(prev => {
+                  const next = [...prev];
+                  mvpRows.forEach(item => {
+                    const idx = next.findIndex(r => 
+                      normalizeMonth(r['마감월']) === normalizeMonth(item['마감월']) && 
+                      String(r['시상내용'] || '').trim() === String(item['시상내용'] || '').trim()
+                    );
+                    if (idx !== -1) {
+                      next[idx] = { ...next[idx], ...item };
+                    } else {
+                      next.push(item);
+                    }
+                  });
+                  return next;
+                });
+                showToast(`전월 챔피언(${mvpRows[0]?.['마감월'] || ''}) 기록이 월간MVP 시트에 저장되었습니다!`, 'success');
+                return;
+              }
+            }
+          } catch (postErr) {
+            console.warn('월간MVP POST 저장 실패, GET fallback 시도:', postErr);
+          }
+
+          // 2. GET fallback 방식 시도
+          const fallbackUrl = `${GAS_URL}?type=save_monthly_mvp&data=${encodeURIComponent(JSON.stringify(mvpRows))}`;
+          const res = await fetch(fallbackUrl, { redirect: 'follow' });
+          if (res.ok) {
+            const json = await res.json();
+            if (json.status === 'success') {
+              setMonthlyMvpData(prev => {
+                const next = [...prev];
+                mvpRows.forEach(item => {
+                  const idx = next.findIndex(r => 
+                    normalizeMonth(r['마감월']) === normalizeMonth(item['마감월']) && 
+                    String(r['시상내용'] || '').trim() === String(item['시상내용'] || '').trim()
+                  );
+                  if (idx !== -1) {
+                    next[idx] = { ...next[idx], ...item };
+                  } else {
+                    next.push(item);
+                  }
+                });
+                return next;
+              });
+              showToast(`전월 챔피언(${mvpRows[0]?.['마감월'] || ''}) 기록이 월간MVP 시트에 저장되었습니다!`, 'success');
+            }
+          }
+        } catch (err) {
+          console.error('월간MVP 시트 저장 실패:', err);
+        }
+      };
+
+      // ─────────────────────────────────────────────────────
       //  월실적_DB 로드 (GAS ?type=monthlydb)
       // ─────────────────────────────────────────────────────
       const fetchMonthlyDb = async () => {
@@ -2576,6 +2769,7 @@
         fetchMonthlyDb();
         fetchOrgInfo();
         fetchDashboardConfig();
+        fetchMonthlyMvp();
       }, []);
 
       const availableYears = useMemo(() => {
@@ -4156,6 +4350,8 @@
               userInfoData={userInfoData}
               orgInfoData={orgInfoData}
               dashboardConfigs={dashboardConfigs}
+              monthlyMvpData={monthlyMvpData}
+              onSaveMonthlyMvp={saveMonthlyMvpToGas}
               selectedYear={selectedYear}
               selectedWeek={selectedWeek}
               onRefreshData={() => {
@@ -4163,6 +4359,7 @@
                 fetchMonthlyDb();
                 fetchOrgInfo();
                 fetchDashboardConfig();
+                fetchMonthlyMvp();
               }}
             />
 
