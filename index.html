@@ -275,6 +275,27 @@
       return isNaN(num) ? '0' : num.toLocaleString();
     }
 
+    // 로컬 스토리지 캐시 헬퍼 (즉시 렌더링 및 로딩 속도 극대화)
+    function loadLocalCache(key, fallback = []) {
+      try {
+        const item = localStorage.getItem(`partners_cache_${key}`);
+        if (!item) return fallback;
+        const parsed = JSON.parse(item);
+        return Array.isArray(parsed) || (parsed && typeof parsed === 'object') ? parsed : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function saveLocalCache(key, data) {
+      try {
+        if (data === undefined || data === null) return;
+        localStorage.setItem(`partners_cache_${key}`, JSON.stringify(data));
+      } catch (e) {
+        // 용량 초과 또는 비활성화 시 조용히 무시
+      }
+    }
+
     // 날짜 및 시간 포맷을 보기 좋게 변경 (예: 2026-08-09T09:30:00 -> 2026년 8월 9일 오전 9시 30분)
     function formatDateTime(val) {
       if (!val) return '';
@@ -1896,8 +1917,15 @@
                           <Trophy size={22} /> {prevMonthTitle} 월 보험료 1등
                         </div>
 
-                        <div className="relative my-6">
+                        <div className="relative my-8">
+                          {/* 🌟 챔피언 상단 바운스 황금 왕관 및 네온 글로우 */}
+                          <div className="absolute -top-14 left-1/2 -translate-x-1/2 animate-bounce z-20">
+                            <Crown size={60} className="text-amber-400 filter drop-shadow-[0_0_24px_rgba(251,191,36,1)]" />
+                          </div>
                           <ProfileAvatar photoUrl={champ.photoUrl} name={champ.name} rank={1} size="xl" />
+                          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-7 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-base md:text-lg shadow-xl whitespace-nowrap border-2 border-white/40">
+                            CHAMPION
+                          </div>
                         </div>
 
                         <div className="text-lg md:text-xl text-amber-400 font-bold">{champ.dept}</div>
@@ -1925,8 +1953,15 @@
                           <Sparkles size={22} /> {prevMonthTitle} 월 체결건수 1등
                         </div>
 
-                        <div className="relative my-6">
+                        <div className="relative my-8">
+                          {/* 🌟 챔피언 상단 바운스 사파이어 블루 다이아몬드/별빛 및 네온 글로우 */}
+                          <div className="absolute -top-14 left-1/2 -translate-x-1/2 animate-bounce z-20">
+                            <Sparkles size={58} className="text-cyan-400 filter drop-shadow-[0_0_24px_rgba(6,182,212,1)]" />
+                          </div>
                           <ProfileAvatar photoUrl={champ.photoUrl} name={champ.name} rank={2} size="xl" />
+                          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-7 py-1.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-black text-base md:text-lg shadow-xl whitespace-nowrap border-2 border-white/40">
+                            CONTRACT KING
+                          </div>
                         </div>
 
                         <div className="text-lg md:text-xl text-blue-400 font-bold">{champ.dept}</div>
@@ -2383,27 +2418,28 @@
 
       const currentTimeInfo = getCurrentWeekAndYear();
       
-      const [data, setData] = useState([]);
-      const [userInfoData, setUserInfoData] = useState([]);
-      const [loading, setLoading] = useState(true);
+      // 캐시 우선 즉시 로딩: 이전 데이터가 로컬 스토리지에 있으면 0초만에 화면을 즉시 렌더링
+      const [data, setData] = useState(() => loadLocalCache('activity', []));
+      const [userInfoData, setUserInfoData] = useState(() => loadLocalCache('userinfo', []));
+      const [loading, setLoading] = useState(() => loadLocalCache('activity', []).length === 0);
       const [error, setError] = useState(null);
       const [usingMockData, setUsingMockData] = useState(false);
 
-      // 월실적_DB 데이터 상태
-      const [monthlyDbData, setMonthlyDbData] = useState([]);
+      // 월실적_DB 데이터 상태 (캐시 우선)
+      const [monthlyDbData, setMonthlyDbData] = useState(() => loadLocalCache('monthlydb', []));
       const [monthlyDbLoading, setMonthlyDbLoading] = useState(false);
       const [monthlyDbError, setMonthlyDbError] = useState(null);
 
-      // 조직정보(단체사진, 슬로건 등) 데이터 상태
-      const [orgInfoData, setOrgInfoData] = useState([]);
+      // 조직정보(단체사진, 슬로건 등) 데이터 상태 (캐시 우선)
+      const [orgInfoData, setOrgInfoData] = useState(() => loadLocalCache('orginfo', []));
 
-      // [신규] 대시보드 관리(슬라이드 순서/노출/시간) 상태
-      const [dashboardConfigs, setDashboardConfigs] = useState([]);
+      // [신규] 대시보드 관리(슬라이드 순서/노출/시간) 상태 (캐시 우선)
+      const [dashboardConfigs, setDashboardConfigs] = useState(() => loadLocalCache('dashboardconfig', []));
       const [showDashboardConfigModal, setShowDashboardConfigModal] = useState(false);
       const [isSavingConfig, setIsSavingConfig] = useState(false);
 
-      // [신규] 월간MVP(전월 챔피언 시트 데이터) 상태
-      const [monthlyMvpData, setMonthlyMvpData] = useState([]);
+      // [신규] 월간MVP(전월 챔피언 시트 데이터) 상태 (캐시 우선)
+      const [monthlyMvpData, setMonthlyMvpData] = useState(() => loadLocalCache('monthly_mvp', []));
 
       // 명예의 전당 (슬라이드쇼 전광판) 모달 상태
       const [showHallOfFame, setShowHallOfFame] = useState(false);
@@ -2512,6 +2548,7 @@
           const rawConfigs = await fetchFromGas('dashboardconfig');
           if (rawConfigs && rawConfigs.length > 0) {
             setDashboardConfigs(rawConfigs);
+            saveLocalCache('dashboardconfig', rawConfigs);
           }
         } catch (err) {
           console.warn('대시보드 관리 설정 조회 오류 (기본값 사용):', err.message);
@@ -2524,6 +2561,7 @@
       const saveDashboardConfigToGas = async (updatedConfigs) => {
         setIsSavingConfig(true);
         try {
+          saveLocalCache('dashboardconfig', updatedConfigs);
           if (!GAS_CONFIGURED) {
             setDashboardConfigs(updatedConfigs);
             showToast('로컬에 설정이 적용되었습니다.', 'info');
@@ -2543,6 +2581,7 @@
               const json = await res.json();
               if (json.status === 'success') {
                 setDashboardConfigs(updatedConfigs);
+                saveLocalCache('dashboardconfig', updatedConfigs);
                 showToast('대시보드 설정이 시트에 성공적으로 저장되었습니다!', 'success');
                 setShowDashboardConfigModal(false);
                 return;
@@ -2560,11 +2599,13 @@
           if (json.status === 'error') throw new Error(json.message);
 
           setDashboardConfigs(updatedConfigs);
+          saveLocalCache('dashboardconfig', updatedConfigs);
           showToast('대시보드 설정이 시트에 성공적으로 저장되었습니다!', 'success');
           setShowDashboardConfigModal(false);
         } catch (err) {
           console.error('대시보드 설정 저장 실패:', err);
           setDashboardConfigs(updatedConfigs);
+          saveLocalCache('dashboardconfig', updatedConfigs);
           showToast('시트 저장 중 오류가 발생했으나 화면에는 즉시 적용되었습니다: ' + err.message, 'warning');
           setShowDashboardConfigModal(false);
         } finally {
@@ -2580,7 +2621,9 @@
         try {
           const raw = await fetchFromGas('monthly_mvp');
           if (raw && Array.isArray(raw)) {
-            setMonthlyMvpData(raw.map(normalizeGasRow));
+            const normalized = raw.map(normalizeGasRow);
+            setMonthlyMvpData(normalized);
+            saveLocalCache('monthly_mvp', normalized);
           }
         } catch (err) {
           console.warn('월간MVP 데이터 로드 스킵 또는 미설정:', err.message);
@@ -2617,6 +2660,7 @@
                       next.push(item);
                     }
                   });
+                  saveLocalCache('monthly_mvp', next);
                   return next;
                 });
                 showToast(`전월 챔피언(${mvpRows[0]?.['마감월'] || ''}) 기록이 월간MVP 시트에 저장되었습니다!`, 'success');
@@ -2646,6 +2690,7 @@
                     next.push(item);
                   }
                 });
+                saveLocalCache('monthly_mvp', next);
                 return next;
               });
               showToast(`전월 챔피언(${mvpRows[0]?.['마감월'] || ''}) 기록이 월간MVP 시트에 저장되었습니다!`, 'success');
@@ -2671,6 +2716,7 @@
           // GAS는 숫자/날짜 타입으로 반환 → 각 필드를 문자열로 정규화
           const rows = rawRows.map(normalizeGasRow);
           setMonthlyDbData(rows);
+          saveLocalCache('monthlydb', rows);
           showToast('월실적_DB 연동에 성공했습니다.', 'success');
         } catch (err) {
           console.warn('월실적_DB 연동 오류:', err.message);
@@ -2691,6 +2737,7 @@
           if (rawOrg && rawOrg.length > 0) {
             const rows = rawOrg.map(normalizeGasRow);
             setOrgInfoData(rows);
+            saveLocalCache('orginfo', rows);
           }
         } catch (err) {
           console.log('조직정보 로드 스킵 또는 미설정:', err.message);
@@ -2729,6 +2776,8 @@
 
           setData(activityRows);
           setUserInfoData(userInfoRows);
+          saveLocalCache('activity', activityRows);
+          saveLocalCache('userinfo', userInfoRows);
           showToast('구글 시트 연동에 성공했습니다.', 'success');
         } catch (err) {
           console.warn('데이터 연동 중 오류 발생:', err.message);
