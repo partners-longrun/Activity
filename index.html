@@ -3616,8 +3616,8 @@ ${diagnosisComment}
           }
         }
 
-        // 2. 클라이언트 직접 호출 시도
-        const apiKey = 'AIzaSyAbTT_4CCc0A_Mbmsjz6l-MLGQFVhJ6_uA';
+        // 2. 클라이언트 직접 호출 시도 (API 키가 없으면 무료 내장 AI 엔진으로 자동 전환)
+        const apiKey = ''; // 보안을 위해 클라이언트 하드코딩 제거 (무료 내장 엔진 사용)
         if (apiKey) {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
           const reqBody = {
@@ -3637,7 +3637,7 @@ ${diagnosisComment}
           if (text) return text;
         }
 
-        throw new Error("외부 AI API 미연결");
+        throw new Error("무료 내장 스마트 AI 엔진으로 전환합니다.");
       };
 
       const generateAIBriefing = async () => {
