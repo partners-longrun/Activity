@@ -296,6 +296,17 @@
       return `${parseInt(m, 10)}월`;
     }
 
+    // 최근 N개월 목록 생성 헬퍼 (YYYY-MM 형식)
+    function getRecentMonthsList(count = 6) {
+      const list = [];
+      const now = new Date();
+      for (let i = 0; i < count; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      return list;
+    }
+
     // 마감월 및 퇴사연월 값을 YYYY-MM 형식으로 정규화 (예: 202608 -> 2026-08, 2026.08 -> 2026-08)
     function normalizeMonth(val) {
       if (!val) return '';
@@ -3029,9 +3040,11 @@
             });
           }
         }
-        // 최근 6개월 기본 포함 (폴백)
-        const recentFallback = getRecentMonthsList(6);
-        recentFallback.forEach(m => monthsSet.add(m));
+        // 시트에 마감월 데이터가 없거나 로드 전일 경우 최근 6개월 기본 포함 (폴백)
+        if (monthsSet.size === 0) {
+          const recentFallback = getRecentMonthsList(6);
+          recentFallback.forEach(m => monthsSet.add(m));
+        }
 
         return Array.from(monthsSet).sort().reverse();
       }, [monthlyDbData]);
