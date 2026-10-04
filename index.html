@@ -1190,10 +1190,9 @@
       onSaveMonthlyMvp,
       selectedYear,
       selectedWeek,
+      selectedMonthlyMonth = '',
       onRefreshData
     }) => {
-      if (!isOpen) return null;
-
       // 모달이 처음 열릴 때 월실적 데이터가 아직 없으면 즉시 로드 트리거
       useEffect(() => {
         if (isOpen && (!monthlyDbData || monthlyDbData.length === 0) && onRefreshData) {
@@ -1221,10 +1220,11 @@
       const currentSlideItem = activeSlides[safeIndex] || activeSlides[0];
       const currentSlideDurationMs = (currentSlideItem?.['지속시간'] || 10) * 1000;
 
-      // 1. 기준 연월 및 지난달 계산
+      // 1. 기준 연월 및 지난달 계산 (전용 기준월 우선)
       const anchorMonth = useMemo(() => {
+        if (selectedMonthlyMonth) return selectedMonthlyMonth;
         return getWeekYearMonth(selectedYear, selectedWeek) || `${selectedYear}-08`;
-      }, [selectedYear, selectedWeek]);
+      }, [selectedMonthlyMonth, selectedYear, selectedWeek]);
 
       const [anchorY, anchorM] = anchorMonth.split('-');
       const monthTitle = `${parseInt(anchorM || '8', 10)}월`;
@@ -1329,12 +1329,15 @@
         if (monthlyDbData && monthlyDbData.length > 0) {
           const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
           const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
+          const colLongPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('장기보험료')) || Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
           const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
 
           monthlyDbData.forEach(row => {
             if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== prevMonth) return;
             if (colState && String(row[colState] || '').trim() !== '정상') return;
+
+            const longPrem = colLongPrem ? parseNum(row[colLongPrem]) : 0;
+            if (longPrem < 1) return;
 
             const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
             if (!sabun) return;
@@ -1353,7 +1356,7 @@
               };
             }
             agg[sabun].contracts += 1;
-            agg[sabun].premium += (colPrem ? parseNum(row[colPrem]) : 0);
+            agg[sabun].premium += longPrem;
           });
         }
 
@@ -1443,12 +1446,15 @@
         if (monthlyDbData && monthlyDbData.length > 0) {
           const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
           const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
+          const colLongPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('장기보험료')) || Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
           const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
 
           monthlyDbData.forEach(row => {
             if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== anchorMonth) return;
             if (colState && String(row[colState] || '').trim() !== '정상') return;
+
+            const longPrem = colLongPrem ? parseNum(row[colLongPrem]) : 0;
+            if (longPrem < 1) return;
 
             const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
             if (!sabun) return;
@@ -1467,7 +1473,7 @@
               };
             }
             agg[sabun].contracts += 1;
-            agg[sabun].premium += (colPrem ? parseNum(row[colPrem]) : 0);
+            agg[sabun].premium += longPrem;
           });
         }
 
@@ -1494,12 +1500,15 @@
         if (monthlyDbData && monthlyDbData.length > 0) {
           const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
           const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
+          const colLongPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('장기보험료')) || Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
           const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
 
           monthlyDbData.forEach(row => {
             if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== anchorMonth) return;
             if (colState && String(row[colState] || '').trim() !== '정상') return;
+
+            const longPrem = colLongPrem ? parseNum(row[colLongPrem]) : 0;
+            if (longPrem < 1) return;
 
             const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
             if (!sabun) return;
@@ -1518,7 +1527,7 @@
               };
             }
             agg[sabun].contracts += 1;
-            agg[sabun].premium += (colPrem ? parseNum(row[colPrem]) : 0);
+            agg[sabun].premium += longPrem;
           });
         }
 
@@ -1649,7 +1658,7 @@
         if (monthlyDbData && monthlyDbData.length > 0) {
           const colMarGamwol = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월'));
           const colMojib = Object.keys(monthlyDbData[0]).find(k => k.includes('모집자사번') || k.includes('사번'));
-          const colPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
+          const colLongPrem = Object.keys(monthlyDbData[0]).find(k => k.includes('장기보험료')) || Object.keys(monthlyDbData[0]).find(k => k.includes('보험료'));
           const colState = Object.keys(monthlyDbData[0]).find(k => k.includes('계약상태'));
           const colProd = Object.keys(monthlyDbData[0]).find(k => k.includes('상품군1') || k.includes('상품군') || k.includes('상품분류') || k.includes('상품종류'));
 
@@ -1657,10 +1666,13 @@
             if (colMarGamwol && normalizeMonth(row[colMarGamwol]) !== anchorMonth) return;
             if (colState && String(row[colState] || '').trim() !== '정상') return;
 
+            const longPrem = colLongPrem ? parseNum(row[colLongPrem]) : 0;
+            if (longPrem < 1) return;
+
             const sabun = colMojib ? String(row[colMojib] || '').trim() : '';
             if (!sabun || !togetherUserMap[sabun]) return;
 
-            totalPremium += (colPrem ? parseNum(row[colPrem]) : 0);
+            totalPremium += longPrem;
             totalContracts += 1;
 
             if (employedSabunSet.has(sabun)) {
@@ -1735,11 +1747,7 @@
         });
       }, [activeSlides]);
 
-      // 구글 시트 연동 주기: 10분 (600,000ms)
-      const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
-      const lastRefreshTimeRef = useRef(Date.now());
-
-      // 슬라이드쇼 타이머 (설정된 개별 지속시간 초 단위 적용)
+      // 슬라이드쇼 타이머 (설정된 개별 지속시간 초 단위 적용 - 백그라운드 자동 갱신 비활성화)
       useEffect(() => {
         if (!isPlaying || activeSlides.length === 0) return;
         // 월실적 데이터가 아직 로드되지 않았으면 데이터가 도착할 때까지 타이머 대기
@@ -1750,18 +1758,7 @@
         const interval = setInterval(() => {
           setProgress(prev => {
             if (prev >= 100) {
-              setCurrentSlideIndex(curr => {
-                const next = (curr + 1) % activeSlides.length;
-                // 슬라이드가 한 바퀴 돌았을 때(next === 0), 마지막 연동 후 10분이 지났으면 연동 실행
-                if (next === 0 && onRefreshData) {
-                  const now = Date.now();
-                  if (now - lastRefreshTimeRef.current >= REFRESH_INTERVAL_MS) {
-                    lastRefreshTimeRef.current = now;
-                    onRefreshData();
-                  }
-                }
-                return next;
-              });
+              setCurrentSlideIndex(curr => (curr + 1) % activeSlides.length);
               return 0;
             }
             return prev + (PROGRESS_INTERVAL / currentDuration) * 100;
@@ -1769,19 +1766,21 @@
         }, PROGRESS_INTERVAL);
 
         return () => clearInterval(interval);
-      }, [isPlaying, currentSlideIndex, activeSlides, onRefreshData, monthlyDbData]);
+      }, [isPlaying, currentSlideIndex, activeSlides, monthlyDbData]);
 
-      // 모달이 열려있는 동안 백그라운드 10분 주기 체크
+      // [명예의 전당 전용] 실행 중일 때만 1시간(60분) 주기로 데이터 자동 갱신 (모달 종료 시 즉시 해제)
       useEffect(() => {
         if (!isOpen || !onRefreshData) return;
-        const checkTimer = setInterval(() => {
-          const now = Date.now();
-          if (now - lastRefreshTimeRef.current >= REFRESH_INTERVAL_MS) {
-            lastRefreshTimeRef.current = now;
-            onRefreshData();
-          }
-        }, 60 * 1000); // 1분마다 경과 시간 점검
-        return () => clearInterval(checkTimer);
+
+        const ONE_HOUR_MS = 60 * 60 * 1000; // 1시간 (3,600,000ms)
+        const hourlyTimer = setInterval(() => {
+          onRefreshData();
+        }, ONE_HOUR_MS);
+
+        // 명예의 전당 모달이 닫히거나 언마운트되면 타이머 즉시 해제
+        return () => {
+          clearInterval(hourlyTimer);
+        };
       }, [isOpen, onRefreshData]);
 
       const handleSelectSlide = (idx) => {
@@ -1822,6 +1821,8 @@
         };
         window.addEventListener('keydown', handleKeyDown);
       }, [onClose, activeSlides.length]);
+
+      if (!isOpen) return null;
 
       return (
         <div className="fixed inset-0 z-50 bg-[#070A11] text-white flex flex-col justify-between overflow-hidden select-none font-sans">
@@ -2537,6 +2538,9 @@
       const [selectedTab, setSelectedTab] = useState('결과'); 
       const [selectedYear, setSelectedYear] = useState(String(currentTimeInfo.year));
       const [selectedWeek, setSelectedWeek] = useState(String(currentTimeInfo.week));
+      const [selectedMonthlyMonth, setSelectedMonthlyMonth] = useState(() => {
+        return getWeekYearMonth(currentTimeInfo.year, currentTimeInfo.week) || '2026-09';
+      });
       const [selectedDept, setSelectedDept] = useState('전체');
       const [sortBy, setSortBy] = useState('사번순'); 
 
@@ -3011,6 +3015,34 @@
         return ['전체', ...allDepts.sort()];
       }, [data, userInfoData]);
 
+      // [신규] 월간 실적 전용 마감월(YYYY-MM) 목록
+      const availableMonthlyMonths = useMemo(() => {
+        const monthsSet = new Set();
+        if (monthlyDbData && monthlyDbData.length > 0) {
+          const colMarGam = Object.keys(monthlyDbData[0]).find(k => k.includes('마감월') || k.includes('실적월'));
+          if (colMarGam) {
+            monthlyDbData.forEach(row => {
+              const m = normalizeMonth(row[colMarGam]);
+              if (m && /^\d{4}-\d{2}$/.test(m)) {
+                monthsSet.add(m);
+              }
+            });
+          }
+        }
+        // 최근 6개월 기본 포함 (폴백)
+        const recentFallback = getRecentMonthsList(6);
+        recentFallback.forEach(m => monthsSet.add(m));
+
+        return Array.from(monthsSet).sort().reverse();
+      }, [monthlyDbData]);
+
+      // 마감월 목록이 로드되면 사용 가능한 유효 월로 보정
+      useEffect(() => {
+        if (availableMonthlyMonths.length > 0 && !availableMonthlyMonths.includes(selectedMonthlyMonth)) {
+          setSelectedMonthlyMonth(availableMonthlyMonths[0]);
+        }
+      }, [availableMonthlyMonths]);
+
       // --- 퀵 액션 버튼 핸들러 ---
       const handleQuickAction = (tab, weekOffset) => {
         const targetYear = String(currentTimeInfo.year);
@@ -3021,7 +3053,7 @@
         showToast(`${getWeekLabel(targetWeek, targetYear)} ${tab} 정보를 조회합니다.`);
       };
 
-      // 월간 실적 계산: 월실적_DB의 '실적분석_신계약전체' 시트 기반
+      // 월간 실적 계산: 월실적_DB의 '실적분석_신계약전체' 시트 기반 (장기보험료 1 이상 & 정상 계약만 집계)
       const monthlyPerformanceStats = useMemo(() => {
         if (selectedTab !== '월간 실적') return null;
 
@@ -3030,8 +3062,8 @@
           return Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
         };
 
-        // 마감월 기준 앵커월 계산 (YYYY-MM 형식)
-        const anchorMonth = getWeekYearMonth(selectedYear, selectedWeek);
+        // 마감월 기준 앵커월 계산 (월간 실적 전용 선택기 우선)
+        const anchorMonth = selectedMonthlyMonth || getWeekYearMonth(selectedYear, selectedWeek);
         const monthsList = getThreeMonthsList(anchorMonth);
 
         // 사용자정보에서 대상 사번 매핑 (활동관리 'Y' 및 'Month' 모두 포함)
@@ -3063,11 +3095,11 @@
 
         const colMarGamwol  = detectColName(monthlyDbData, ['마감월']);
         const colMojibJabun = detectColName(monthlyDbData, ['모집자사번']);
-        const colBohumryo   = detectColName(monthlyDbData, ['보험료']);
+        const colLongPrem   = detectColName(monthlyDbData, ['장기보험료']) || detectColName(monthlyDbData, ['보험료']);
         const colGyeyakState = detectColName(monthlyDbData, ['계약상태']);
 
         // 컬럼이 없으면 빈 결과 반환
-        if (!colMarGamwol || !colMojibJabun || !colBohumryo) {
+        if (!colMarGamwol || !colMojibJabun || !colLongPrem) {
           const emptyTotals = { premium: 0, contracts: 0, ta: 0, ap: 0, activePartners: new Set() };
           return {
             trendLabels: monthsList.map(m => formatMonthLabel(m)),
@@ -3089,7 +3121,7 @@
         const partnerMonthlyAgg = {};
         monthsList.forEach(m => { partnerMonthlyAgg[m] = {}; });
 
-        // 월실적_DB 필터링 및 집계
+        // 월실적_DB 필터링 및 집계 (장기보험료 1원 이상 & 계약상태 정상만)
         monthlyDbData.forEach(row => {
           const rawMonth = row[colMarGamwol];
           const rowMonth = normalizeMonth(rawMonth);
@@ -3113,10 +3145,12 @@
             if (state !== '정상') return;
           }
 
-          const premium = parseNum(row[colBohumryo]);
+          // 장기보험료 1 이상인 행만 카운팅 및 합산
+          const longPrem = parseNum(row[colLongPrem]);
+          if (longPrem < 1) return;
 
-          monthlyTotals[rowMonth].premium += premium;
-          monthlyTotals[rowMonth].contracts += 1; // 정상 계약 건수
+          monthlyTotals[rowMonth].premium += longPrem;
+          monthlyTotals[rowMonth].contracts += 1; // 장기보험료 >= 1 & 계약상태 = 정상 계약 건수
           monthlyTotals[rowMonth].activePartners.add(sabun);
 
           if (!partnerMonthlyAgg[rowMonth][sabun]) {
@@ -3129,7 +3163,7 @@
             };
           }
           partnerMonthlyAgg[rowMonth][sabun].건수 += 1;
-          partnerMonthlyAgg[rowMonth][sabun].보험료 += premium;
+          partnerMonthlyAgg[rowMonth][sabun].보험료 += longPrem;
         });
 
         const trendLabels = monthsList.map(m => formatMonthLabel(m));
@@ -3156,7 +3190,7 @@
           cumulativeContracts,
           monthlyDbNotReady: false,
         };
-      }, [monthlyDbData, selectedTab, selectedYear, selectedWeek, selectedDept, userInfoData]);
+      }, [monthlyDbData, selectedTab, selectedYear, selectedWeek, selectedMonthlyMonth, selectedDept, userInfoData]);
 
       const filteredData = useMemo(() => {
         const effectiveTab = (selectedTab === '진단 리포트' ? '결과' : selectedTab);
@@ -4177,35 +4211,56 @@ ${diagnosisComment}
                 {/* 우측: 콤보박스 필터 영역 및 정렬 방식 컨트롤 */}
                 <div className="flex flex-col items-end gap-3 w-full xl:w-auto">
                   <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto xl:justify-end">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
-                        <Calendar size={14} /> 연도
-                      </label>
-                      <select 
-                        value={selectedYear} 
-                        onChange={(e) => setSelectedYear(e.target.value)}
-                        className="w-24 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
-                      >
-                        {availableYears.map(year => (
-                          <option key={year} value={year}>{year}년</option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
-                        <Calendar size={14} /> 주차
-                      </label>
-                      <select 
-                        value={selectedWeek} 
-                        onChange={(e) => setSelectedWeek(e.target.value)}
-                        className="w-36 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
-                      >
-                        {availableWeeks.map(week => (
-                          <option key={week} value={week}>{getWeekLabel(week, selectedYear)}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {selectedTab === '월간 실적' ? (
+                      /* 월간 실적 전용: 기준월 (YYYY-MM) 선택기 */
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
+                          <Calendar size={14} className="text-orange-500" /> 기준월
+                        </label>
+                        <select 
+                          value={selectedMonthlyMonth} 
+                          onChange={(e) => setSelectedMonthlyMonth(e.target.value)}
+                          className="bg-orange-50 border border-orange-200 text-orange-800 rounded-lg px-2.5 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-bold shadow-sm"
+                        >
+                          {availableMonthlyMonths.map(m => (
+                            <option key={m} value={m}>{formatMonthLabel(m)} ({m})</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      /* 예정, 결과, 진단 리포트용 연도 및 주차 선택기 */
+                      <>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
+                            <Calendar size={14} /> 연도
+                          </label>
+                          <select 
+                            value={selectedYear} 
+                            onChange={(e) => setSelectedYear(e.target.value)}
+                            className="w-24 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
+                          >
+                            {availableYears.map(year => (
+                              <option key={year} value={year}>{year}년</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
+                            <Calendar size={14} /> 주차
+                          </label>
+                          <select 
+                            value={selectedWeek} 
+                            onChange={(e) => setSelectedWeek(e.target.value)}
+                            className="w-36 bg-gray-50 border border-gray-200 text-gray-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-sm font-medium"
+                          >
+                            {availableWeeks.map(week => (
+                              <option key={week} value={week}>{getWeekLabel(week, selectedYear)}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <label className="text-xs font-semibold text-gray-500 whitespace-nowrap flex items-center gap-1">
@@ -4355,22 +4410,32 @@ ${diagnosisComment}
                           {formatMonthLabel(monthlyPerformanceStats.anchorMonth)} 성과 통계 및 추이
                         </h2>
                         <p className="text-sm text-gray-600 mt-1">
-                          선택한 주차({selectedWeek}주차)를 기준으로 최근 3개월의 트렌드를 추적하고 해당 월의 누적 실적을 정밀 분석합니다.
+                          선택한 기준월({monthlyPerformanceStats.anchorMonth})의 장기보험 실적 트렌드를 추적하고 당월 누적 실적을 정밀 분석합니다.
                         </p>
                       </div>
                     </div>
-                    <span className="text-xs bg-white border border-orange-200 px-3 py-1.5 rounded-full text-orange-700 font-bold shadow-sm">
-                      당월 기준: {monthlyPerformanceStats.anchorMonth}
-                    </span>
+                    <div className="flex items-center gap-2 bg-white border border-orange-200 px-3 py-1.5 rounded-full shadow-sm">
+                      <Calendar size={14} className="text-orange-500" />
+                      <span className="text-xs text-gray-500 font-bold">기준월:</span>
+                      <select 
+                        value={selectedMonthlyMonth}
+                        onChange={(e) => setSelectedMonthlyMonth(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-orange-700 outline-none cursor-pointer"
+                      >
+                        {availableMonthlyMonths.map(m => (
+                          <option key={m} value={m}>{formatMonthLabel(m)} ({m})</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                       <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                          <span className="w-1 h-4 bg-orange-500 rounded-full"></span> 3개월 누적 보험료 추이
+                          <span className="w-1 h-4 bg-orange-500 rounded-full"></span> 3개월 누적 장기보험료 추이
                         </h3>
-                        <span className="text-xs text-gray-400">(결과 합산 기준)</span>
+                        <span className="text-xs text-gray-400">(계약상태 = 정상, 장기보험료 ≥ 1원)</span>
                       </div>
                       <div className="p-2">
                         <SvgTrendChart 
@@ -4387,7 +4452,7 @@ ${diagnosisComment}
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
                           <span className="w-1 h-4 bg-blue-500 rounded-full"></span> 3개월 신계약 건수 추이
                         </h3>
-                        <span className="text-xs text-gray-400">(계약상태 = 정상 기준)</span>
+                        <span className="text-xs text-gray-400">(계약상태 = 정상, 장기보험료 ≥ 1원)</span>
                       </div>
                       <div className="p-2">
                         <SvgTrendChart 
@@ -4423,11 +4488,11 @@ ${diagnosisComment}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {/* 당월 누적 보험료 */}
                     <div className="bg-gradient-to-br from-orange-500 to-orange-400 p-5 rounded-2xl text-white shadow-md relative overflow-hidden">
-                      <p className="text-xs font-semibold opacity-85">당월 신계약 보험료</p>
+                      <p className="text-xs font-semibold opacity-85">당월 신계약 장기보험료</p>
                       <h4 className="text-2xl font-extrabold mt-2">
                         {formatCurrency(monthlyPerformanceStats.currentMonthTotals.premium)}원
                       </h4>
-                      <p className="text-xs opacity-70 mt-1">계약상태 = 정상 기준</p>
+                      <p className="text-xs opacity-70 mt-1">계약상태 = 정상, 장기보험료 ≥ 1원 기준</p>
                       <div className="absolute right-3 bottom-3 opacity-15">
                         <Target size={56} />
                       </div>
@@ -4439,7 +4504,7 @@ ${diagnosisComment}
                       <h4 className="text-2xl font-extrabold text-gray-800 mt-2">
                         {monthlyPerformanceStats.currentMonthTotals.contracts}건
                       </h4>
-                      <p className="text-xs text-gray-400 mt-1">정상 계약 행 수</p>
+                      <p className="text-xs text-gray-400 mt-1">장기보험료 유효 계약 건수</p>
                       <div className="absolute right-3 bottom-3 text-orange-100 opacity-50">
                         <BarChart2 size={56} />
                       </div>
@@ -4447,7 +4512,7 @@ ${diagnosisComment}
 
                     {/* 3개월 누적 보험료 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-blue-100 relative overflow-hidden">
-                      <p className="text-xs font-semibold text-blue-500">3개월 누적 보험료</p>
+                      <p className="text-xs font-semibold text-blue-500">3개월 누적 장기보험료</p>
                       <h4 className="text-xl font-extrabold text-gray-800 mt-2">
                         {formatCurrency(monthlyPerformanceStats.cumulativePremium)}원
                       </h4>
@@ -4473,7 +4538,7 @@ ${diagnosisComment}
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-5 border-b border-gray-50 flex items-center justify-between">
                       <h3 className="font-bold text-gray-800 text-base">당월 성과 랭킹 (개인별 신계약 합계)</h3>
-                      <span className="text-xs text-gray-500">보험료 기준 정렬 · 계약상태 = 정상</span>
+                      <span className="text-xs text-gray-500">장기보험료 기준 정렬 · 계약상태 = 정상 (장기보험료 1원 이상)</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm text-center border-collapse min-w-[500px]">
@@ -4483,7 +4548,7 @@ ${diagnosisComment}
                             <th className="py-3 px-4 font-semibold">소속</th>
                             <th className="py-3 px-4 font-semibold">이름</th>
                             <th className="py-3 px-4 font-semibold">신계약 건수</th>
-                            <th className="py-3 px-4 font-semibold text-right pr-8">합산 보험료</th>
+                            <th className="py-3 px-4 font-semibold text-right pr-8">합산 장기보험료</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -4703,25 +4768,28 @@ ${diagnosisComment}
             {renderModal()}
             {renderCoachingModal()}
 
-            {/* 명예의 전당 (슬라이드쇼 전광판) 모달 */}
-            <HallOfFameModal 
-              isOpen={showHallOfFame}
-              onClose={() => setShowHallOfFame(false)}
-              monthlyDbData={monthlyDbData}
-              monthlyDbLoading={monthlyDbLoading}
-              activityData={data}
-              userInfoData={userInfoData}
-              orgInfoData={orgInfoData}
-              dashboardConfigs={dashboardConfigs}
-              monthlyMvpData={monthlyMvpData}
-              onSaveMonthlyMvp={saveMonthlyMvpToGas}
-              selectedYear={selectedYear}
-              selectedWeek={selectedWeek}
-              onRefreshData={() => {
-                fetchInitData(true);
-                fetchMonthlyDb(true);
-              }}
-            />
+            {/* 명예의 전당 (슬라이드쇼 전광판) 모달 - 실행 중일 때만 마운트되어 1시간 주기 자동 갱신 및 닫힐 시 타이머 완전 해제 */}
+            {showHallOfFame && (
+              <HallOfFameModal 
+                isOpen={showHallOfFame}
+                onClose={() => setShowHallOfFame(false)}
+                monthlyDbData={monthlyDbData}
+                monthlyDbLoading={monthlyDbLoading}
+                activityData={data}
+                userInfoData={userInfoData}
+                orgInfoData={orgInfoData}
+                dashboardConfigs={dashboardConfigs}
+                monthlyMvpData={monthlyMvpData}
+                onSaveMonthlyMvp={saveMonthlyMvpToGas}
+                selectedYear={selectedYear}
+                selectedWeek={selectedWeek}
+                selectedMonthlyMonth={selectedMonthlyMonth}
+                onRefreshData={() => {
+                  fetchInitData(false);
+                  fetchMonthlyDb(false);
+                }}
+              />
+            )}
 
             {/* [신규] 대시보드 관리 (슬라이드 순서/노출/시간 설정) 모달 */}
             <DashboardConfigModal 
