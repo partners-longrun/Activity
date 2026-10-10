@@ -5,13 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>활동 모니터링 대시보드 - 파트너스본부</title>
   
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="파트너스본부 활동 및 실적 모니터링 대시보드">
+  <meta name="theme-color" content="#FFF9F5">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="활동 모니터링 대시보드 - 파트너스본부">
+  <meta property="og:description" content="파트너스본부 실시간 활동 및 실적 모니터링">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://activity.long-run.app">
+
+  <!-- 속도 최적화: 외부 리소스 사전 연결 (Preconnect & DNS-Prefetch) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://script.google.com">
+  <link rel="preconnect" href="https://drive.google.com">
+  <link rel="preconnect" href="https://lh3.googleusercontent.com">
+  <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="dns-prefetch" href="https://drive.google.com">
+  <link rel="dns-prefetch" href="https://lh3.googleusercontent.com">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <!-- 안정적인 빌드를 위해 Babel standalone 버전을 7.15.8로 고정하여 ESM import 버그 해결 -->
   <script src="https://unpkg.com/@babel/standalone@7.15.8/babel.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- 렌더링 블로킹 방지를 위해 다운로드 전용 라이브러리는 지연 로드 (defer) -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     body {
